@@ -3,7 +3,7 @@
 //! Ten moduł jest **kontraktem** między Rdzeniem a przyszłymi warstwami
 //! (TUI, CLI, moduły, pluginy, adaptery). Gwarantujemy:
 //!
-//! - nazwy typów i funkcji wymienione w [`Api`] (aliasy i reexporty);
+//! - nazwy typów i funkcji wymienione w module (aliasy i reexporty);
 //! - semantykę metod udokumentowaną w `///` przy każdym typie;
 //! - że `Cargo.toml` nie zmienia się w sposób łamiący API bez bumpu
 //!   `API_VERSION` w [`crate::API_VERSION`].

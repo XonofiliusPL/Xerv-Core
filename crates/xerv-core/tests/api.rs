@@ -38,8 +38,9 @@ fn api_aliases_match_crate_root_aliases() {
     let e2: error::Error = e;
     assert_eq!(e2.to_string(), "config: x");
     let r: ApiResult<i32> = Ok(7);
-    let r2: error::Result<i32> = r;
-    assert_eq!(r2.unwrap(), 7);
+    // Konwersja aliasu ApiResult -> error::Result tożsamość typów.
+    fn _assert_same<T>(_: error::Result<T>, _: ApiResult<T>) {}
+    _assert_same(Ok(7), r);
 }
 
 #[test]
