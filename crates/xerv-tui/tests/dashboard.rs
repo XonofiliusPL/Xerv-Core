@@ -41,8 +41,15 @@ fn render_lines(app: &mut App, width: u16, height: u16) -> Vec<String> {
         .unwrap();
     app.on_render(areas_holder.expect("ui did not return areas"));
     let s = terminal.backend().to_string();
-    // Ratatui TestBackend drukuje linie w cudzysłowach — wyciągamy środek.
-    s.lines().map(|l| l.trim_matches('"').to_string()).collect()
+    // Ratatui TestBackend drukuje linie w cudzysłowach — usuwamy OBUDOWĘ,
+    // zachowując dokładne pozycje kolumn (tekst bufora starts at col 0).
+    s.lines()
+        .map(|l| {
+            let t = l.strip_prefix('"').unwrap_or(l);
+            let t = t.strip_suffix('"').unwrap_or(t);
+            t.to_string()
+        })
+        .collect()
 }
 
 /// Środkowa linia każdego slotu command baru musi mieć zamykającą ramkę │
@@ -302,4 +309,209 @@ fn panel_side() -> xerv_tui::app::Panel {
 #[allow(dead_code)]
 fn area_of(r: Area) -> Area {
     r
+}
+
+// ---- style-system tests (DESIGN.md) ---------------------------------------------
+
+use ratatui::style::Color;
+
+/// Zwraca style komórki bufora w danym (x, y) — dzięki temu testujemy kolory,
+/// a nie tylko tekst.
+fn cell_styles(app: &mut App, width: u16, height: u16) -> Vec<Vec<ratatui::style::Style>> {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut areas_holder: Option<xerv_tui::app::UiAreas> = None;
+    terminal
+        .draw(|f| {
+            areas_holder = Some(ui(f, app));
+        })
+        .unwrap();
+    app.on_render(areas_holder.expect("areas"));
+    let buf = terminal.backend().buffer().clone();
+    (0..buf.area.height)
+        .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].style()).collect())
+        .collect()
+}
+
+fn find_text_row(lines: &[String], needle: &str) -> (usize, usize) {
+    for (y, l) in lines.iter().enumerate() {
+        if let Some(xb) = l.find(needle) {
+            // byte-index → char-index (TestBackend bufory są indeksowane znakami,
+            // a stringi mogą zawierać UTF-8 jak ● czy ─).
+            let xc = l[..xb].chars().count();
+            return (y, xc);
+        }
+    }
+    panic!("'{needle}' not found in render");
+}
+
+#[test]
+fn style_labels_are_muted_not_accented() {
+    // Etykiety w kartach (np. "data dir") muszą być DarkGray (muted),
+    // nigdy Cyan/Magenta — akcenty nie mogą dekorować statycznych etykiet.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let lines = {
+        let b = TestBackend::new(120, 24);
+        let mut t = Terminal::new(b).unwrap();
+        let mut h = None;
+        t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+        t.backend().to_string()
+    };
+    let lns: Vec<String> = lines
+        .lines()
+        .map(|l| l.trim_matches('"').to_string())
+        .collect();
+    let styles = cell_styles(&mut app, 120, 24);
+    let (y, x) = find_text_row(&lns, "data dir");
+    let st = styles[y][x];
+    assert_eq!(
+        st.fg,
+        Some(Color::DarkGray),
+        "card label must be muted (DarkGray), got {:?}",
+        st.fg
+    );
+}
+
+#[test]
+fn style_card_values_are_brighter_than_labels() {
+    // Wartość "state.json" (neutralna) = White; etykieta = DarkGray.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let lines = {
+        let b = TestBackend::new(120, 24);
+        let mut t = Terminal::new(b).unwrap();
+        let mut h = None;
+        t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+        t.backend().to_string()
+    };
+    let lns: Vec<String> = lines
+        .lines()
+        .map(|l| l.trim_matches('"').to_string())
+        .collect();
+    let styles = cell_styles(&mut app, 120, 24);
+    let (ly, lx) = find_text_row(&lns, "state file");
+    let label_style = styles[ly][lx];
+    assert_eq!(label_style.fg, Some(Color::DarkGray));
+    // Wartość zaczyna się po etykiecie w tej samej linii: "state file  state.json"
+    let line = &lns[ly];
+    let vx = line.find("state.json").expect("value in same row");
+    let value_style = styles[ly][vx];
+    assert_eq!(
+        value_style.fg,
+        Some(Color::White),
+        "card value must be White (neutral), got {:?}",
+        value_style.fg
+    );
+}
+
+#[test]
+fn style_accent_values_are_magenta() {
+    // "api version" i "schema" to akcenty secondary — Magenta.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let lines = {
+        let b = TestBackend::new(120, 24);
+        let mut t = Terminal::new(b).unwrap();
+        let mut h = None;
+        t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+        t.backend().to_string()
+    };
+    let lns: Vec<String> = lines
+        .lines()
+        .map(|l| l.trim_matches('"').to_string())
+        .collect();
+    let styles = cell_styles(&mut app, 120, 24);
+    for needle in ["api version", "schema"] {
+        let (y, lx) = find_text_row(&lns, needle);
+        // Pierwsza komórka PO etykiecie, która nie jest muted (etykieta = DarkGray);
+        // to początek wartości (ma accent secondary albo White).
+        let line_len = lns[y].chars().count();
+        let st = (lx..line_len)
+            .map(|cx| styles[y][cx])
+            .find(|s| s.fg != Some(Color::DarkGray) && s.fg != Some(Color::Reset))
+            .expect("value cell after label");
+        assert_eq!(
+            st.fg,
+            Some(Color::Magenta),
+            "'{needle}' value must use secondary accent (Magenta), got {:?}",
+            st.fg
+        );
+    }
+}
+
+#[test]
+fn style_status_is_semantic_green() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let lines = {
+        let b = TestBackend::new(120, 24);
+        let mut t = Terminal::new(b).unwrap();
+        let mut h = None;
+        t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+        t.backend().to_string()
+    };
+    let lns: Vec<String> = lines
+        .lines()
+        .map(|l| l.trim_matches('"').to_string())
+        .collect();
+    let styles = cell_styles(&mut app, 120, 24);
+    let (y, _) = find_text_row(&lns, "● READY");
+    let line = &lns[y];
+    let x = line[..line.find("READY").unwrap()].chars().count();
+    let st = (x..)
+        .map(|cx| styles[y][cx])
+        .find(|s| s.fg.is_some() && s.fg != Some(Color::Reset))
+        .expect("styled READY cell");
+    assert_eq!(st.fg, Some(Color::Green));
+    assert!(st.add_modifier.contains(ratatui::style::Modifier::BOLD));
+}
+
+#[test]
+fn style_shutdown_is_semantic_red() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    app.core.shutdown().unwrap();
+    let lines = {
+        let b = TestBackend::new(120, 24);
+        let mut t = Terminal::new(b).unwrap();
+        let mut h = None;
+        t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+        t.backend().to_string()
+    };
+    let lns: Vec<String> = lines
+        .lines()
+        .map(|l| l.trim_matches('"').to_string())
+        .collect();
+    let styles = cell_styles(&mut app, 120, 24);
+    let (y, _) = find_text_row(&lns, "SHUTDOWN");
+    let line = &lns[y];
+    let x = line[..line.find("SHUTDOWN").unwrap()].chars().count();
+    let st = styles[y][x];
+    assert_eq!(st.fg, Some(Color::Red));
+}
+
+#[test]
+fn style_active_command_is_cyan_bold() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let bar = app.command_bar_area.expect("bar");
+    let slot_w = bar.w / COMMAND_COUNT as u16;
+    // Klik w 1. slot, render, sprawdź styl tekstu slotu.
+    app.handle_event(Event::ClickCommand(bar.x + slot_w / 2, bar.y + bar.h / 2));
+    let backend = TestBackend::new(120, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut h = None;
+    terminal.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+    let buf = terminal.backend().buffer().clone();
+    // Znajdź komórkę z 'm' w pierwszym slocie (tekst " modules ").
+    let y = bar.y + bar.h / 2;
+    let x = bar.x + 1;
+    let st = buf[(x, y)].style();
+    assert_eq!(st.fg, Some(Color::Cyan), "active slot text must be Cyan");
+    assert!(
+        st.add_modifier.contains(ratatui::style::Modifier::BOLD),
+        "active slot text must be BOLD"
+    );
 }

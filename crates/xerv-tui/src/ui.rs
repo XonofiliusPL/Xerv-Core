@@ -102,17 +102,54 @@ fn format_uptime(started_at_unix: u64) -> String {
     }
 }
 
-fn label_style() -> Style {
+// ---- design tokens (DESIGN.md) -------------------------------------------------
+//
+// Każdy kolor z DESIGN.md ma odpowiadającą funkcję stylu. Jedno miejsce prawdy:
+// zmiana identyfikacji = zmiana tutaj (i w DESIGN.md), nie rozproszone literały.
+
+/// primary #00D7D7 (terminal Cyan) — wyłącznie akcent interaktywny.
+fn accent_primary() -> Style {
+    Style::default().fg(Color::Cyan)
+}
+
+/// primary + waga (BOLD) — brand, aktywny element, status napisu interakcji.
+fn accent_primary_bold() -> Style {
+    accent_primary().add_modifier(Modifier::BOLD)
+}
+
+/// secondary #D787D7 (terminal Magenta) — wybrane informacje (wersja API,
+/// wartości „odpowiedzi"). Nigdy ramki interaktywne.
+fn accent_secondary() -> Style {
+    Style::default().fg(Color::Magenta)
+}
+
+/// value #FFFFFF (terminal White) — wartości danych; jaśniejsze niż etykieta,
+/// wyraźnie odróżnione od pustego tła.
+fn value_style() -> Style {
+    Style::default().fg(Color::White)
+}
+
+/// muted #585858 (terminal DarkGray) — etykiety, separatory, idle ramki.
+fn muted_style() -> Style {
     Style::default().fg(Color::DarkGray)
+}
+
+/// success/danger — wyłącznie semantyka statusu READY/SHUTDOWN.
+fn status_style(ok: bool) -> Style {
+    if ok {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::Red)
+    }
 }
 
 fn card_border_style(active: bool, hovered: bool) -> Style {
     if active {
-        Style::default().fg(Color::Cyan)
+        accent_primary()
     } else if hovered {
-        Style::default().fg(Color::Magenta)
+        accent_secondary()
     } else {
-        Style::default().fg(Color::DarkGray)
+        muted_style()
     }
 }
 
@@ -125,7 +162,7 @@ fn card_block<'a>(title: &'a str, active: bool, hovered: bool) -> Block<'a> {
     if active || hovered {
         b = b.title_style(card_border_style(active, hovered).add_modifier(Modifier::BOLD));
     } else {
-        b = b.title_style(label_style());
+        b = b.title_style(muted_style());
     }
     b
 }
@@ -134,12 +171,7 @@ fn card_block<'a>(title: &'a str, active: bool, hovered: bool) -> Block<'a> {
 
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     if area.width < MIN_USABLE_WIDTH {
-        let title = Line::from(Span::styled(
-            " Xerv",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ));
+        let title = Line::from(Span::styled(" Xerv", accent_primary_bold()));
         let block = Block::default().borders(Borders::BOTTOM);
         f.render_widget(Paragraph::new(title).block(block), area);
         return;
@@ -152,61 +184,39 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
     let brand = Line::from(vec![
         Span::raw(" "),
-        Span::styled(
-            "XERV",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled("  •  ", label_style()),
+        Span::styled("XERV", accent_primary_bold()),
+        Span::styled("  •  ", muted_style()),
         Span::styled(
             format!("api {}.{}.{}", api.major, api.minor, api.patch),
-            Style::default().fg(Color::Magenta),
+            accent_secondary(),
         ),
-        Span::styled("  •  core ", label_style()),
+        Span::styled("  •  core ", muted_style()),
         if shutdown {
-            Span::styled(
-                "SHUTDOWN",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            )
+            Span::styled("SHUTDOWN", status_style(false).add_modifier(Modifier::BOLD))
         } else {
-            Span::styled(
-                "READY",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )
+            Span::styled("READY", status_style(true).add_modifier(Modifier::BOLD))
         },
-        Span::styled(format!("  boot #{}", st.boot_count), label_style()),
+        Span::styled(format!("  boot #{}", st.boot_count), muted_style()),
     ]);
 
-    let separator = Line::from(Span::styled("─".repeat(area.width as usize), label_style()));
+    let separator = Line::from(Span::styled("─".repeat(area.width as usize), muted_style()));
 
     let meta = Line::from(vec![
         Span::raw(" "),
-        Span::styled("data ", label_style()),
-        Span::styled(
-            short_path(&cfg.data_dir, 3),
-            Style::default().fg(Color::Cyan),
-        ),
-        Span::styled("  schema v", label_style()),
-        Span::styled(
-            st.schema_version.to_string(),
-            Style::default().fg(Color::Magenta),
-        ),
-        Span::styled("  uptime ", label_style()),
-        Span::styled(
-            format_uptime(st.started_at_unix),
-            Style::default().fg(Color::Magenta),
-        ),
-        Span::styled("  log ", label_style()),
-        Span::styled(cfg.log_level.clone(), Style::default().fg(Color::Cyan)),
+        Span::styled("data ", muted_style()),
+        Span::styled(short_path(&cfg.data_dir, 3), accent_secondary()),
+        Span::styled("  schema v", muted_style()),
+        Span::styled(st.schema_version.to_string(), accent_secondary()),
+        Span::styled("  uptime ", muted_style()),
+        Span::styled(format_uptime(st.started_at_unix), accent_secondary()),
+        Span::styled("  log ", muted_style()),
+        Span::styled(cfg.log_level.clone(), accent_secondary()),
     ]);
 
     let lines = vec![brand, separator, meta];
     let block = Block::default()
         .borders(Borders::BOTTOM)
-        .border_style(label_style());
+        .border_style(muted_style());
     let p = Paragraph::new(lines).block(block);
     f.render_widget(p, area);
 }
@@ -236,9 +246,9 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
         .borders(Borders::ALL)
         .title(" panels ")
         .border_style(if app.active_panel == Panel::Side {
-            Style::default().fg(Color::Cyan)
+            accent_primary()
         } else {
-            Style::default()
+            muted_style()
         });
     let list = List::new(items).block(block);
     f.render_widget(list, area);
@@ -257,8 +267,8 @@ fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Ar
     draw_cards(f, chunks[1], app)
 }
 
-/// Jednolinijsowy pasek statusu: grupy oddzielone dim separatorami,
-/// kolor tylko semantyczny (status) — akcenty zostają dla kart.
+/// Jednolinijsowy pasek statusu: status semantyczny, wartości neutralne,
+/// separatory muted. Spójny z headerem (label→value, te same style).
 fn draw_status_strip(f: &mut Frame, area: Rect, app: &App) {
     let shutdown = app.core.is_shutdown();
     let st = app.core.state();
@@ -266,36 +276,34 @@ fn draw_status_strip(f: &mut Frame, area: Rect, app: &App) {
 
     let status = if shutdown {
         Line::from(vec![
-            Span::styled("● ", Style::default().fg(Color::Red)),
+            Span::styled("● ", status_style(false)),
             Span::styled(
                 "CORE SHUTDOWN",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                status_style(false).add_modifier(Modifier::BOLD),
             ),
         ])
     } else {
         Line::from(vec![
-            Span::styled("● ", Style::default().fg(Color::Green)),
+            Span::styled("● ", status_style(true)),
             Span::styled(
                 "CORE READY",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
+                status_style(true).add_modifier(Modifier::BOLD),
             ),
         ])
     };
 
-    let label = |t: &str| Span::styled(format!("{t} "), label_style());
-    let value = |t: String| Span::raw(t);
+    let label = |t: &str| Span::styled(format!("{t} "), muted_style());
+    let value = |t: String| Span::styled(t, value_style());
 
     let mut line_spans = vec![Span::raw(" ")];
     line_spans.extend(status.spans);
-    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(Span::styled("  │  ", muted_style()));
     line_spans.push(label("api"));
     line_spans.push(value(format!("{}.{}.{}", api.major, api.minor, api.patch)));
-    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(Span::styled("  │  ", muted_style()));
     line_spans.push(label("boot #"));
     line_spans.push(value(st.boot_count.to_string()));
-    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(Span::styled("  │  ", muted_style()));
     line_spans.push(label("uptime"));
     line_spans.push(value(format_uptime(st.started_at_unix)));
 
@@ -326,12 +334,13 @@ fn draw_cards(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)>
     let shutdown = app.core.is_shutdown();
 
     // Karta 1: System — grupa "identity" + separator + grupa "storage/log".
+    // api version i schema = "odpowiedzi" → secondary accent; reszta neutralna.
     let sys_lines = vec![
-        kv(
+        kv_accent(
             "api version",
             &format!("{}.{}.{}", api.major, api.minor, api.patch),
         ),
-        kv("schema", &format!("v{}", st.schema_version)),
+        kv_accent("schema", &format!("v{}", st.schema_version)),
         separator_line(),
         kv("data dir", &short_path(&cfg.data_dir, 2)),
         kv("state file", &cfg.state_filename),
@@ -353,40 +362,41 @@ fn draw_cards(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)>
 
 /// Cienki separator wewnątrz karty (dim).
 fn separator_line() -> Line<'static> {
-    Line::from(Span::styled(
-        "  ························",
-        Style::default().fg(Color::DarkGray),
-    ))
+    Line::from(Span::styled("  ························", muted_style()))
 }
 
 /// Wiersz statusu z semantycznym kolorem (green/red).
 fn status_kv(shutdown: bool) -> Line<'static> {
     Line::from(vec![
         Span::raw("  "),
-        Span::styled(format!("{:<12}", "status"), label_style()),
+        Span::styled(format!("{:<12}", "status"), muted_style()),
         if shutdown {
             Span::styled(
                 "● SHUTDOWN",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                status_style(false).add_modifier(Modifier::BOLD),
             )
         } else {
-            Span::styled(
-                "● READY",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )
+            Span::styled("● READY", status_style(true).add_modifier(Modifier::BOLD))
         },
     ])
 }
 
-/// Para etykieta→wartość. Etykieta dim, wartość neutralna (default fg) —
-/// akcenty (cyan/magenta) nie dominują; czytelność ponad dekorację.
+/// Para etykieta→wartość. Etykieta muted, wartość neutralna (White).
 fn kv<'a>(label: &str, value: &str) -> Line<'a> {
     Line::from(vec![
         Span::raw("  "),
-        Span::styled(format!("{label:<12}"), label_style()),
-        Span::raw(value.to_string()),
+        Span::styled(format!("{label:<12}"), muted_style()),
+        Span::styled(value.to_string(), value_style()),
+    ])
+}
+
+/// Para etykieta→wartość z akcentem secondary (magenta) — dla „odpowiedzi":
+/// kluczowych wartości, na które patrzy użytkownik w pierwszej kolejności.
+fn kv_accent<'a>(label: &str, value: &str) -> Line<'a> {
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(format!("{label:<12}"), muted_style()),
+        Span::styled(value.to_string(), accent_secondary()),
     ])
 }
 
@@ -424,17 +434,9 @@ fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
         // Aktywny slot: cyan ramka + bold cyan tekst (bez REVERSED —
         // czytelniejszy i mniej agresywny niż pełna inwersja).
         let (border, text) = if selected {
-            (
-                Style::default().fg(Color::Cyan),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
+            (accent_primary(), accent_primary_bold())
         } else {
-            (
-                Style::default().fg(Color::DarkGray),
-                Style::default().fg(Color::DarkGray),
-            )
+            (muted_style(), muted_style())
         };
         let label = format!(" {} ", name);
         let block = Block::default().borders(Borders::ALL).border_style(border);
@@ -448,15 +450,15 @@ fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect) {
     let keys = Line::from(vec![
         Span::raw(" "),
-        Span::styled("q", Style::default().fg(Color::Cyan)),
+        Span::styled("q", accent_primary()),
         Span::raw(" quit  "),
-        Span::styled("Tab", Style::default().fg(Color::Cyan)),
+        Span::styled("Tab", accent_primary()),
         Span::raw(" panel  "),
-        Span::styled("r", Style::default().fg(Color::Cyan)),
+        Span::styled("r", accent_primary()),
         Span::raw(" refresh  "),
-        Span::styled("←→", Style::default().fg(Color::Cyan)),
+        Span::styled("←→", accent_primary()),
         Span::raw(" command  "),
-        Span::styled("Enter", Style::default().fg(Color::Cyan)),
+        Span::styled("Enter", accent_primary()),
         Span::raw(" select"),
     ]);
     let p = Paragraph::new(keys);
