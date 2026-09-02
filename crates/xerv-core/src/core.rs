@@ -40,6 +40,11 @@ impl XervCore {
         crate::version::api_version()
     }
 
+    /// Zwraca `true` jeśli `shutdown()` został już wywołany.
+    pub fn is_shutdown(&self) -> bool {
+        *self.shutdown_flag.lock().unwrap()
+    }
+
     /// Zapisuje stan i blokuje instancję przed dalszym użyciem.
     /// Drugie wywołanie zwraca `Error::Lifecycle`.
     pub fn shutdown(&self) -> Result<()> {
