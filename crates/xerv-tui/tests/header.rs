@@ -56,18 +56,22 @@ fn make_app_in_tempdir(dir: &std::path::Path, started_at_unix: u64) -> App {
     App::try_new(cfg, state_path).unwrap()
 }
 
-fn render_to_string(app: &App, width: u16, height: u16) -> String {
+fn render_to_string(app: &mut App, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| ui(f, app)).unwrap();
+    terminal
+        .draw(|f| {
+            let _ = ui(f, app);
+        })
+        .unwrap();
     terminal.backend().to_string()
 }
 
 #[test]
 fn header_contains_brand_and_api_version() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(s.contains("XERV"), "header missing brand: {s}");
     assert!(s.contains("api 0.1.0"), "header missing api version: {s}");
 }
@@ -76,8 +80,8 @@ fn header_contains_brand_and_api_version() {
 fn header_reflects_state_from_core_not_hardcoded() {
     // boot_count i schema_version pochodzą z pliku stanu w data_dir.
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(
         s.contains("boot #42"),
         "header should show boot #42 from state: {s}"
@@ -91,8 +95,8 @@ fn header_reflects_state_from_core_not_hardcoded() {
 #[test]
 fn header_shows_log_level_from_config() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(
         s.contains("debug"),
         "header should show log_level debug: {s}"
@@ -102,8 +106,8 @@ fn header_shows_log_level_from_config() {
 #[test]
 fn header_shows_ready_status_when_core_running() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(s.contains("READY"), "header should show READY status: {s}");
     assert!(
         !s.contains("SHUTDOWN"),
@@ -120,8 +124,8 @@ fn header_uptime_is_human_readable() {
         .as_secs();
     let one_hour_ago = now - 3600;
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), one_hour_ago);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app(dir.path().to_path_buf(), one_hour_ago);
+    let s = render_to_string(&mut app, 120, 20);
     // Akceptujemy "1h0m" lub "1h" (zależnie od formattera) — ważne, żeby "h" się pojawiło.
     assert!(
         s.contains('h') && (s.contains("1h") || s.contains("59m")),
@@ -132,17 +136,17 @@ fn header_uptime_is_human_readable() {
 #[test]
 fn header_does_not_overflow_wide_terminal() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
     // Szeroki terminal: nic nie powinno wyjść poza ramkę.
-    let _ = render_to_string(&app, 200, 20);
+    let _ = render_to_string(&mut app, 200, 20);
 }
 
 #[test]
 fn header_does_not_overflow_narrow_terminal() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
     // Wąski terminal: header renderuje się w wersji uproszczonej (sama nazwa).
-    let s = render_to_string(&app, 25, 20);
+    let s = render_to_string(&mut app, 25, 20);
     assert!(
         s.contains("Xerv"),
         "minimal header should still show brand: {s}"
@@ -152,9 +156,9 @@ fn header_does_not_overflow_narrow_terminal() {
 #[test]
 fn header_reflects_shutdown_status() {
     let dir = tempfile::tempdir().unwrap();
-    let app = make_app(dir.path().to_path_buf(), 1_700_000_000);
+    let mut app = make_app(dir.path().to_path_buf(), 1_700_000_000);
     app.core.shutdown().unwrap();
-    let s = render_to_string(&app, 120, 20);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(
         s.contains("SHUTDOWN"),
         "header should show SHUTDOWN after shutdown(): {s}"
@@ -180,8 +184,8 @@ fn header_shortens_long_data_path() {
         .join("nested")
         .join("xerv");
     std::fs::create_dir_all(long_dir.parent().unwrap()).unwrap();
-    let app = make_app_in_tempdir(long_dir.parent().unwrap(), 1_700_000_000);
-    let s = render_to_string(&app, 120, 20);
+    let mut app = make_app_in_tempdir(long_dir.parent().unwrap(), 1_700_000_000);
+    let s = render_to_string(&mut app, 120, 20);
     assert!(
         s.contains("…/"),
         "long path should be truncated with ellipsis: {s}"

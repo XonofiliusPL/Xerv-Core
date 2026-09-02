@@ -6,14 +6,16 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use ratatui::Frame;
 
-use crate::app::App;
+use crate::app::{App, Area, Panel, UiAreas, COMMANDS, COMMAND_COUNT};
 
 const HEADER_HEIGHT: u16 = 4;
 const FOOTER_HEIGHT: u16 = 1;
 const SIDE_WIDTH_PERCENT: u16 = 25;
 const MIN_USABLE_WIDTH: u16 = 30;
+const COMMAND_BAR_HEIGHT: u16 = 3;
 
-pub fn ui(f: &mut Frame, app: &App) {
+/// Rysuje cały ekran i zwraca obszary interaktywne dla `App::on_render`.
+pub fn ui(f: &mut Frame, app: &mut App) -> UiAreas {
     let area = f.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -25,13 +27,37 @@ pub fn ui(f: &mut Frame, app: &App) {
         .split(area);
 
     draw_header(f, chunks[0], app);
-    draw_main(f, chunks[1], app);
+    let (side_rect, main_rect, cards) = draw_main(f, chunks[1], app);
     draw_footer(f, chunks[2]);
+
+    // Command bar na dole main area.
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(COMMAND_BAR_HEIGHT)])
+        .split(main_rect);
+    let cmd_area = main_chunks[1];
+    draw_command_bar(f, cmd_area, app);
+
+    UiAreas {
+        side: Some(to_area(side_rect)),
+        main: Some(to_area(main_rect)),
+        command_bar: Some(to_area(cmd_area)),
+        cards,
+    }
 }
 
 // ---- helpers ----------------------------------------------------------------
 
-/// Skraca ścieżkę do ostatnich N segmentów, żeby header się nie rozrastał.
+fn to_area(r: Rect) -> Area {
+    Area {
+        x: r.x,
+        y: r.y,
+        w: r.width,
+        h: r.height,
+    }
+}
+
+/// Skraca ścieżkę do ostatnich N segmentów.
 fn short_path(path: &std::path::Path, max_segments: usize) -> String {
     let parts: Vec<_> = path
         .components()
@@ -44,7 +70,7 @@ fn short_path(path: &std::path::Path, max_segments: usize) -> String {
     format!("…/{}", kept.join("/"))
 }
 
-/// Człowiekowo-czytelny uptime z `started_at_unix` (sekundy).
+/// Człowiekowo-czytelny uptime.
 fn format_uptime(started_at_unix: u64) -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -62,14 +88,37 @@ fn format_uptime(started_at_unix: u64) -> String {
     }
 }
 
-// ---- header -----------------------------------------------------------------
+fn label_style() -> Style {
+    Style::default().fg(Color::DarkGray)
+}
 
-/// Rysuje header w trzech liniach:
-///   1) XERV • api 0.1.0                        CORE READY  boot #1
-///   2) ─────────────────────────────────────────────────────────────
-///   3) data ~/.local/share/xerv  schema v1  uptime 2m
+fn card_border_style(active: bool, hovered: bool) -> Style {
+    if active {
+        Style::default().fg(Color::Cyan)
+    } else if hovered {
+        Style::default().fg(Color::Magenta)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    }
+}
+
+/// Ramka karty — aktywna (fokus klawiatury) cyan, hover magenta, spoczynek dark gray.
+fn card_block<'a>(title: &'a str, active: bool, hovered: bool) -> Block<'a> {
+    let mut b = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" {title} "))
+        .border_style(card_border_style(active, hovered));
+    if active || hovered {
+        b = b.title_style(card_border_style(active, hovered).add_modifier(Modifier::BOLD));
+    } else {
+        b = b.title_style(label_style());
+    }
+    b
+}
+
+// ---- header (bez zmian względem poprzedniej wersji) -----------------------------
+
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
-    // Za mała szerokość — header uproszczony (tylko nazwa), żeby nie overflowować.
     if area.width < MIN_USABLE_WIDTH {
         let title = Line::from(Span::styled(
             " Xerv",
@@ -87,7 +136,6 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let st = app.core.state();
     let shutdown = app.core.is_shutdown();
 
-    // Linia 1: brand po lewej, status po prawej.
     let brand = Line::from(vec![
         Span::raw(" "),
         Span::styled(
@@ -96,12 +144,12 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  •  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  •  ", label_style()),
         Span::styled(
             format!("api {}.{}.{}", api.major, api.minor, api.patch),
             Style::default().fg(Color::Magenta),
         ),
-        Span::styled("  •  core ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  •  core ", label_style()),
         if shutdown {
             Span::styled(
                 "SHUTDOWN",
@@ -115,49 +163,43 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
                     .add_modifier(Modifier::BOLD),
             )
         },
-        Span::styled(
-            format!("  boot #{}", st.boot_count),
-            Style::default().fg(Color::DarkGray),
-        ),
+        Span::styled(format!("  boot #{}", st.boot_count), label_style()),
     ]);
 
-    // Linia 2: separator.
-    let separator = Line::from(Span::styled(
-        "─".repeat(area.width as usize),
-        Style::default().fg(Color::DarkGray),
-    ));
+    let separator = Line::from(Span::styled("─".repeat(area.width as usize), label_style()));
 
-    // Linia 3: meta — data_dir (skrócone), schema, uptime.
     let meta = Line::from(vec![
         Span::raw(" "),
-        Span::styled("data ", Style::default().fg(Color::DarkGray)),
+        Span::styled("data ", label_style()),
         Span::styled(
             short_path(&cfg.data_dir, 3),
             Style::default().fg(Color::Cyan),
         ),
-        Span::styled("  schema v", Style::default().fg(Color::DarkGray)),
+        Span::styled("  schema v", label_style()),
         Span::styled(
             st.schema_version.to_string(),
             Style::default().fg(Color::Magenta),
         ),
-        Span::styled("  uptime ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  uptime ", label_style()),
         Span::styled(
             format_uptime(st.started_at_unix),
             Style::default().fg(Color::Magenta),
         ),
-        Span::styled("  log ", Style::default().fg(Color::DarkGray)),
+        Span::styled("  log ", label_style()),
         Span::styled(cfg.log_level.clone(), Style::default().fg(Color::Cyan)),
     ]);
 
     let lines = vec![brand, separator, meta];
     let block = Block::default()
         .borders(Borders::BOTTOM)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(label_style());
     let p = Paragraph::new(lines).block(block);
     f.render_widget(p, area);
 }
 
-fn draw_main(f: &mut Frame, area: Rect, app: &App) {
+// ---- main split ----------------------------------------------------------------
+
+fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Rect, Vec<(&'static str, Area)>) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -167,7 +209,8 @@ fn draw_main(f: &mut Frame, area: Rect, app: &App) {
         .split(area);
 
     draw_side(f, chunks[0], app);
-    draw_dashboard(f, chunks[1], app);
+    let cards = draw_dashboard(f, chunks[1], app);
+    (chunks[0], chunks[1], cards)
 }
 
 fn draw_side(f: &mut Frame, area: Rect, app: &App) {
@@ -178,7 +221,7 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" panels ")
-        .border_style(if app.active_panel == crate::app::Panel::Side {
+        .border_style(if app.active_panel == Panel::Side {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default()
@@ -187,41 +230,198 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(list, area);
 }
 
-fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) {
+// ---- dashboard -----------------------------------------------------------------
+
+/// Gęsty dashboard: pasek statusu + grid 3 kart. Zwraca obszary kart.
+fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .split(area);
+
+    draw_status_strip(f, chunks[0], app);
+    draw_cards(f, chunks[1], app)
+}
+
+/// Jednolinijkowy pasek statusu wewnątrz dashboardu (gęsta informacja).
+fn draw_status_strip(f: &mut Frame, area: Rect, app: &App) {
+    let shutdown = app.core.is_shutdown();
+    let st = app.core.state();
+    let api = app.core.api_version();
+
+    let status_span = if shutdown {
+        Span::styled(
+            "● SHUTDOWN",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(
+            "● READY",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
+    };
+
+    let line = Line::from(vec![
+        Span::raw(" "),
+        status_span,
+        Span::styled("  api ", label_style()),
+        Span::styled(
+            format!("{}.{}.{}", api.major, api.minor, api.patch),
+            Style::default().fg(Color::Magenta),
+        ),
+        Span::styled("  boot #", label_style()),
+        Span::styled(
+            st.boot_count.to_string(),
+            Style::default().fg(Color::Magenta),
+        ),
+        Span::styled("  uptime ", label_style()),
+        Span::styled(
+            format_uptime(st.started_at_unix),
+            Style::default().fg(Color::Magenta),
+        ),
+    ]);
+
+    f.render_widget(Paragraph::new(line), area);
+}
+
+/// Grid kart: lewa kolumna (system/storage), prawa (runtime + state).
+fn draw_cards(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
+    let mut areas = Vec::new();
+
+    // Dwie kolumny; na wąskim terminalu jedna (vertical stack).
+    let two_cols = area.width >= 80;
+    let card_chunks = if two_cols {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area)
+    };
+
     let cfg = app.core.config();
     let st = app.core.state();
     let api = app.core.api_version();
-    let body = vec![
-        Line::from(Span::styled(
-            "Core initialized",
-            Style::default().fg(Color::Green),
-        )),
-        Line::from(""),
-        Line::from(format!(
-            "  api version  : {}.{}.{}",
-            api.major, api.minor, api.patch
-        )),
-        Line::from(format!("  data_dir     : {}", cfg.data_dir.display())),
-        Line::from(format!("  state_file   : {}", cfg.state_filename)),
-        Line::from(format!("  schema v     : {}", st.schema_version)),
-        Line::from(format!("  boots        : {}", st.boot_count)),
-        Line::from(""),
-        Line::from(Span::styled(
-            "TUI działa. Naciśnij ? aby zobaczyć pomoc (TODO).",
-            Style::default().fg(Color::DarkGray),
-        )),
+
+    // Karta 1: System.
+    let sys_lines = vec![
+        kv(
+            "api version",
+            &format!("{}.{}.{}", api.major, api.minor, api.patch),
+            Color::Magenta,
+        ),
+        kv("data dir", &short_path(&cfg.data_dir, 2), Color::Cyan),
+        kv("state file", &cfg.state_filename, Color::Cyan),
+        kv("log level", &cfg.log_level, Color::Cyan),
     ];
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(" dashboard ")
-        .border_style(if app.active_panel == crate::app::Panel::Main {
-            Style::default().fg(Color::Magenta)
-        } else {
-            Style::default()
-        });
-    let p = Paragraph::new(body).block(block);
-    f.render_widget(p, area);
+    render_card(
+        f,
+        card_chunks[0],
+        "system",
+        sys_lines,
+        false,
+        false,
+        &mut areas,
+    );
+
+    // Karta 2: Runtime/State.
+    let run_lines = vec![
+        kv("schema", &format!("v{}", st.schema_version), Color::Magenta),
+        kv("boot count", &st.boot_count.to_string(), Color::Magenta),
+        kv("uptime", &format_uptime(st.started_at_unix), Color::Magenta),
+        kv(
+            "status",
+            if app.core.is_shutdown() {
+                "SHUTDOWN"
+            } else {
+                "READY"
+            },
+            if app.core.is_shutdown() {
+                Color::Red
+            } else {
+                Color::Green
+            },
+        ),
+    ];
+    render_card(
+        f,
+        card_chunks[1],
+        "runtime",
+        run_lines,
+        false,
+        false,
+        &mut areas,
+    );
+
+    areas
 }
+
+/// Jedna para etykieta→wartość.
+fn kv<'a>(label: &str, value: &str, value_color: Color) -> Line<'a> {
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(format!("{label:<12}"), label_style()),
+        Span::styled(value.to_string(), Style::default().fg(value_color)),
+    ])
+}
+
+/// Renderuje kartę i zapisuje jej obszar.
+fn render_card(
+    f: &mut Frame,
+    area: Rect,
+    title: &'static str,
+    lines: Vec<Line<'static>>,
+    _active: bool,
+    _hovered: bool,
+    areas: &mut Vec<(&'static str, Area)>,
+) {
+    let block = card_block(title, _active, _hovered);
+    let p = Paragraph::new(lines).block(block);
+    f.render_widget(p, area);
+    areas.push((title, to_area(area)));
+}
+
+// ---- command bar ----------------------------------------------------------------
+
+/// Poziomy pasek komend — sloty na przyszłe moduły (modules/agents/registry/...).
+/// Interaktywny: ←/→ zmienia zaznaczenie, Enter wybiera; mysz klika slot.
+fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
+    let slots = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![
+            Constraint::Percentage(100 / COMMAND_COUNT as u16);
+            COMMAND_COUNT
+        ])
+        .split(area);
+
+    for (i, name) in COMMANDS.iter().enumerate() {
+        let selected = app.selected_command == i;
+        let style = if selected {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::REVERSED | Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        let label = format!(" {} ", name);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(if selected {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            });
+        let p = Paragraph::new(Line::from(Span::styled(label, style))).block(block);
+        f.render_widget(p, slots[i]);
+    }
+}
+
+// ---- footer (bez zmian) -----------------------------------------------------------
 
 fn draw_footer(f: &mut Frame, area: Rect) {
     let keys = Line::from(vec![
@@ -231,7 +431,11 @@ fn draw_footer(f: &mut Frame, area: Rect) {
         Span::styled("Tab", Style::default().fg(Color::Cyan)),
         Span::raw(" panel  "),
         Span::styled("r", Style::default().fg(Color::Cyan)),
-        Span::raw(" refresh"),
+        Span::raw(" refresh  "),
+        Span::styled("←→", Style::default().fg(Color::Cyan)),
+        Span::raw(" command  "),
+        Span::styled("Enter", Style::default().fg(Color::Cyan)),
+        Span::raw(" select"),
     ]);
     let p = Paragraph::new(keys);
     f.render_widget(p, area);

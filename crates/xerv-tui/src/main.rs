@@ -10,7 +10,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use xerv_core::api::CoreConfig;
-use xerv_tui::app::App;
+use xerv_tui::app::{App, UiAreas};
 use xerv_tui::event::{read_event, Event};
 use xerv_tui::ui::ui;
 
@@ -51,7 +51,9 @@ where
     std::io::Error: From<B::Error>,
 {
     loop {
-        terminal.draw(|f| ui(f, app))?;
+        let mut areas: Option<UiAreas> = None;
+        terminal.draw(|f| areas = Some(ui(f, app)))?;
+        app.on_render(areas.expect("ui did not return areas"));
         if poll(Duration::from_millis(200))? {
             let ev = read_event()?;
             app.handle_event(ev);
