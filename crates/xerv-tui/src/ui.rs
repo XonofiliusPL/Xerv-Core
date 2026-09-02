@@ -3,10 +3,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use crate::app::{App, Area, Panel, UiAreas, COMMANDS, COMMAND_COUNT};
+use crate::app::{App, Area, Panel, UiAreas, ACTIVE_NAV, COMMANDS, COMMAND_COUNT, NAV_ITEMS};
 
 const HEADER_HEIGHT: u16 = 4;
 const FOOTER_HEIGHT: u16 = 1;
@@ -237,21 +237,84 @@ fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Vec<(&'static str, 
     (chunks[0], cards)
 }
 
+/// Sidebar — nawigacja Xerv. Struktura wg NAV_ITEMS; aktywny ekran (Dashboard)
+/// wyróżniony cyan + wskaźnik ▎; kursor nawigacji (↑/↓) podświetla wiersz.
+/// Sekcje przyszłe: muted (nieaktywne do momentu implementacji).
 fn draw_side(f: &mut Frame, area: Rect, app: &App) {
-    let items = vec![
-        ListItem::new("Dashboard"),
-        ListItem::new("(more screens soon)"),
-    ];
+    // Nagłówek sekcji + pozycje: 1 wiersz nagłówka grupy między sekcjami.
+    // Layout: [ header "NAVIGATION" ] [ items... ] [ spacer ] [ footer-hint ]
+    // Dzielimy WNĘTRZE ramki (bez borderów) — nagłówek nie nadpisze ramki.
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),                      // nagłówek sekcji
+            Constraint::Length(NAV_ITEMS.len() as u16), // pozycje
+            Constraint::Min(1),                         // wolna przestrzeń
+        ])
+        .split(inner);
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" panels ")
+        .title(" xerv ")
         .border_style(if app.active_panel == Panel::Side {
             accent_primary()
         } else {
             muted_style()
         });
-    let list = List::new(items).block(block);
-    f.render_widget(list, area);
+    f.render_widget(block, area);
+
+    // Nagłówek sekcji — muted small-caps styl (małe litery, spacje).
+    let head = Line::from(Span::styled(" NAVIGATION", muted_style()));
+    f.render_widget(Paragraph::new(head), rows[0]);
+
+    // Pozycje nawigacji.
+    for (i, (name, implemented)) in NAV_ITEMS.iter().enumerate() {
+        let is_cursor = app.nav_cursor == i && app.active_panel == Panel::Side;
+        let is_active = i == ACTIVE_NAV;
+        let y = rows[1].y + i as u16;
+
+        // Wiersz: wskaźnik + nazwa. Active: cyan bold; cursor: reversed-lite
+        // (wskaźnik ▎ w cyan); przyszłe: muted.
+        let (marker, name_style): (Span, Span) = if is_active {
+            (
+                Span::styled("▎ ", accent_primary()),
+                Span::styled((*name).to_string(), accent_primary_bold()),
+            )
+        } else if is_cursor {
+            (
+                Span::styled("▎ ", muted_style()),
+                Span::styled((*name).to_string(), value_style()),
+            )
+        } else if *implemented {
+            (
+                Span::raw("  "),
+                Span::styled((*name).to_string(), value_style()),
+            )
+        } else {
+            (
+                Span::raw("  "),
+                Span::styled((*name).to_string(), muted_style()),
+            )
+        };
+
+        let line = Line::from(vec![marker, name_style]);
+        // Tło wiersza kursora — subtelne (bez pełnej inwersji): rysujemy
+        // Paragraph z wierszem; ratatui nie ma row-bg, więc dla kursora
+        // używamy tylko wskaźnika — czytelne i zgodne z minimalizmem.
+        let rect = Rect {
+            x: area.x + 1,
+            y,
+            width: area.width.saturating_sub(2),
+            height: 1,
+        };
+        f.render_widget(Paragraph::new(line), rect);
+    }
 }
 
 // ---- dashboard -----------------------------------------------------------------
@@ -458,6 +521,8 @@ fn draw_footer(f: &mut Frame, area: Rect) {
         Span::raw(" refresh  "),
         Span::styled("←→", accent_primary()),
         Span::raw(" command  "),
+        Span::styled("↑↓", accent_primary()),
+        Span::raw(" nav  "),
         Span::styled("Enter", accent_primary()),
         Span::raw(" select"),
     ]);

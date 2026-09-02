@@ -51,12 +51,29 @@ impl Area {
     }
 }
 
+/// Struktura nawigacji sidebaru Xerv. Tylko Dashboard jest zaimplementowany —
+/// pozostałe pozycje to zarys przyszłych ekranów (nie implementujemy ich funkcji).
+pub const NAV_ITEMS: [(&str, bool); 7] = [
+    ("Dashboard", true),
+    ("Modules", false),
+    ("Agents", false),
+    ("Registry", false),
+    ("Services", false),
+    ("Logs", false),
+    ("Config", false),
+];
+
+/// Indeks aktywnego ekranu (Dashboard na starcie).
+pub const ACTIVE_NAV: usize = 0;
+
 #[derive(Debug)]
 pub struct App {
     pub core: XervCore,
     pub active_panel: Panel,
     pub should_quit: bool,
     pub selected_command: usize,
+    /// Indeks pozycji nawigacji sidebaru (kursor ↑/↓).
+    pub nav_cursor: usize,
     /// Aktualizowany przez `Event::Hover` — Area ostatnio najechanej karty.
     pub hovered_card: Option<Area>,
     /// Czy mysz weszła w command bar ostatnio (do rozróżnienia kliknięcia).
@@ -79,6 +96,7 @@ impl App {
             active_panel: Panel::Side,
             should_quit: false,
             selected_command: 0,
+            nav_cursor: ACTIVE_NAV,
             hovered_card: None,
             hovered_command: None,
             card_areas: Vec::new(),
@@ -119,6 +137,15 @@ impl App {
         if let Some(rect) = self.side_area {
             if rect.contains(col, row) {
                 self.active_panel = Panel::Side;
+                // Klik w pozycję nawigacji. Render: wiersz i = inner_top + 1
+                // (nagłówek NAVIGATION) + i, gdzie inner_top = rect.y + 1.
+                let first_item_row = rect.y + 2;
+                if row >= first_item_row {
+                    let idx = (row - first_item_row) as usize;
+                    if idx < NAV_ITEMS.len() {
+                        self.nav_cursor = idx;
+                    }
+                }
                 return;
             }
         }
@@ -172,6 +199,23 @@ impl App {
                 // Akcja jeszcze nie zaimplementowana (scope: brak nowych funkcji biznesowych).
                 // Na tym etapie SelectCommand tylko potwierdza fokus na Main i przesuwa zaznaczenie.
                 self.active_panel = Panel::Main;
+            }
+            Event::NavDown => {
+                self.nav_cursor = (self.nav_cursor + 1) % NAV_ITEMS.len();
+                self.active_panel = Panel::Side;
+            }
+            Event::NavUp => {
+                self.nav_cursor = if self.nav_cursor == 0 {
+                    NAV_ITEMS.len() - 1
+                } else {
+                    self.nav_cursor - 1
+                };
+                self.active_panel = Panel::Side;
+            }
+            Event::NavSelect => {
+                // Ekran poza Dashboard nie jest jeszcze zaimplementowany —
+                // pozycja pozostaje zaznaczona, ale nic nie przełącza.
+                self.active_panel = Panel::Side;
             }
             Event::ClickPanel(col, row) => self.on_click(col, row),
             Event::ClickCommand(col, row) => self.on_click(col, row),

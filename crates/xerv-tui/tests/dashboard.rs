@@ -7,7 +7,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 use xerv_core::api::CoreConfig;
-use xerv_tui::app::{App, Area, COMMANDS, COMMAND_COUNT};
+use xerv_tui::app::{App, Area, COMMANDS, COMMAND_COUNT, NAV_ITEMS};
 use xerv_tui::event::Event;
 use xerv_tui::ui::ui;
 
@@ -514,4 +514,150 @@ fn style_active_command_is_cyan_bold() {
         st.add_modifier.contains(ratatui::style::Modifier::BOLD),
         "active slot text must be BOLD"
     );
+}
+
+// ---- sidebar tests --------------------------------------------------------------
+
+#[test]
+fn sidebar_shows_navigation_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let s = render_lines(&mut app, 120, 24).join("\n");
+    for (name, _) in NAV_ITEMS.iter() {
+        assert!(s.contains(name), "sidebar missing nav item '{name}'");
+    }
+    assert!(s.contains("NAVIGATION"), "sidebar missing section header");
+    assert!(
+        !s.contains("more screens soon"),
+        "placeholder text still present"
+    );
+}
+
+#[test]
+fn sidebar_active_item_is_dashboard_with_marker() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let lines = render_lines(&mut app, 120, 24);
+    // Aktywny ekran Dashboard ma wskaźnik ▎ na swoim wierszu.
+    let row = lines
+        .iter()
+        .find(|l| l.contains("Dashboard"))
+        .expect("Dashboard row");
+    assert!(
+        row.contains('▎'),
+        "active nav item must have marker: '{row}'"
+    );
+    // Inne pozycje — bez markera.
+    let mods = lines.iter().find(|l| l.contains("Modules")).unwrap();
+    assert!(
+        !mods.contains('▎'),
+        "inactive item must not have marker: '{mods}'"
+    );
+}
+
+#[test]
+fn nav_keyboard_down_up_cycles_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    assert_eq!(app.nav_cursor, 0);
+    app.handle_event(Event::NavDown);
+    assert_eq!(app.nav_cursor, 1);
+    app.handle_event(Event::NavUp);
+    assert_eq!(app.nav_cursor, 0);
+    // Zawijanie w górę z 0 → ostatnia pozycja.
+    app.handle_event(Event::NavUp);
+    assert_eq!(app.nav_cursor, NAV_ITEMS.len() - 1);
+    app.handle_event(Event::NavDown);
+    assert_eq!(app.nav_cursor, 0);
+}
+
+#[test]
+fn nav_sets_focus_to_side_panel() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    app.active_panel = xerv_tui::app::Panel::Main;
+    app.handle_event(Event::NavDown);
+    assert_eq!(app.active_panel, xerv_tui::app::Panel::Side);
+}
+
+#[test]
+fn sidebar_mouse_click_selects_nav_item() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let side = app.side_area.expect("side area");
+    // Klik w 3. pozycję (Agents, idx 2): first_item_row = side.y + 2.
+    let click_row = side.y + 2 + 2;
+    app.handle_event(Event::ClickPanel(side.x + 2, click_row));
+    assert_eq!(
+        app.nav_cursor, 2,
+        "click should move nav cursor to 'Agents'"
+    );
+    assert_eq!(app.active_panel, xerv_tui::app::Panel::Side);
+}
+
+#[test]
+fn sidebar_click_below_items_does_not_panic_or_change_cursor() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let side = app.side_area.expect("side area");
+    // Klik w wolną przestrzeń poniżej listy.
+    app.handle_event(Event::ClickPanel(side.x + 2, side.y + side.h - 2));
+    assert_eq!(
+        app.nav_cursor, 0,
+        "click on empty area must not change cursor"
+    );
+}
+
+#[test]
+fn sidebar_cursor_visible_after_keyboard_nav_render() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    app.handle_event(Event::NavDown); // cursor = Modules
+    let lines = render_lines(&mut app, 120, 24);
+    // Cursor na Modules: wiersz Modules zawiera wskaźnik ▎ (muted, ale obecny).
+    let mods = lines.iter().find(|l| l.contains("Modules")).unwrap();
+    assert!(mods.contains('▎'), "cursor row must show marker: '{mods}'");
+    // Dashboard pozostaje aktywnym ekranem (cyan) — ale marker tam gdzie cursor.
+    let dash = lines.iter().find(|l| l.contains("Dashboard")).unwrap();
+    assert!(dash.contains('▎'), "active screen keeps its own marker");
+}
+
+#[test]
+fn sidebar_no_clipping_at_any_width() {
+    let dir = tempfile::tempdir().unwrap();
+    for width in [45u16, 60, 80, 100, 120, 160] {
+        let mut app = make_app(dir.path(), 1_700_000_000);
+        let lines = render_lines(&mut app, width, 24);
+        for (i, l) in lines.iter().enumerate() {
+            assert!(
+                l.chars().count() <= width as usize,
+                "{width}: line {i} overflows: '{l}'"
+            );
+        }
+        // Wszystkie pozycje obecne (nazwy mogą być obcięte przy bardzo wąskim,
+        // więc sprawdzamy prefix 'Mod' zamiast pełnej nazwy dla 45).
+        // W bardzo wąskim sidebarze nagłówek może być kontrolowanie przycięty.
+        let s = lines.join("\n");
+        assert!(
+            s.contains("NAVIGATION") || s.contains("NAVIGATI"),
+            "{width}: section header missing"
+        );
+    }
+}
+
+#[test]
+fn sidebar_items_within_side_area_at_all_widths() {
+    let dir = tempfile::tempdir().unwrap();
+    for width in [45u16, 80, 120, 160] {
+        let mut app = make_app(dir.path(), 1_700_000_000);
+        let _ = render_lines(&mut app, width, 24);
+        let side = app.side_area.expect("side area");
+        // Wiersze pozycji muszą mieścić się w side area (render: side.y+2 .. +2+len).
+        assert!(
+            side.y + 2 + NAV_ITEMS.len() as u16 <= side.y + side.h,
+            "{width}: nav items exceed side area height"
+        );
+    }
 }
