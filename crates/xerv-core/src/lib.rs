@@ -6,7 +6,9 @@
 pub mod config;
 pub mod error;
 pub mod logging;
+pub mod state;
 pub mod version;
 pub use config::CoreConfig;
 pub use error::{Error, Result};
+pub use state::CoreState;
 pub use version::{api_version, API_VERSION};
