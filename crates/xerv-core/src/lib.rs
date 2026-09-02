@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod error;
+pub mod logging;
 pub mod version;
 pub use config::CoreConfig;
 pub use error::{Error, Result};
