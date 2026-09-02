@@ -27,20 +27,22 @@ pub fn ui(f: &mut Frame, app: &mut App) -> UiAreas {
         .split(area);
 
     draw_header(f, chunks[0], app);
-    let (side_rect, main_rect, cards) = draw_main(f, chunks[1], app);
     draw_footer(f, chunks[2]);
 
-    // Command bar na dole main area.
+    // Najpierw dzielimy main na: obszar kart (Min) + command bar (Length).
+    // Wcześniej dashboard rysował się na CAŁYM main_area, a command bar
+    // nadpisywał jego dolne linie — stąd clipping ramek.
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(COMMAND_BAR_HEIGHT)])
-        .split(main_rect);
+        .split(chunks[1]);
     let cmd_area = main_chunks[1];
+    let (side_rect, cards) = draw_main(f, main_chunks[0], app);
     draw_command_bar(f, cmd_area, app);
 
     UiAreas {
         side: Some(to_area(side_rect)),
-        main: Some(to_area(main_rect)),
+        main: Some(to_area(main_chunks[0])),
         command_bar: Some(to_area(cmd_area)),
         cards,
     }
@@ -199,7 +201,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
 // ---- main split ----------------------------------------------------------------
 
-fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Rect, Vec<(&'static str, Area)>) {
+fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Vec<(&'static str, Area)>) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -210,7 +212,7 @@ fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Rect, Vec<(&'static
 
     draw_side(f, chunks[0], app);
     let cards = draw_dashboard(f, chunks[1], app);
-    (chunks[0], chunks[1], cards)
+    (chunks[0], cards)
 }
 
 fn draw_side(f: &mut Frame, area: Rect, app: &App) {
@@ -391,10 +393,12 @@ fn render_card(
 /// Poziomy pasek komend — sloty na przyszłe moduły (modules/agents/registry/...).
 /// Interaktywny: ←/→ zmienia zaznaczenie, Enter wybiera; mysz klika slot.
 fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
+    // Ratio zamiast Percentage — suma slotów zawsze wypełnia dokładnie `area.width`
+    // (Percentage z zaokrągleń gubi 1-2 kolumny i ostatni slot wychodzi poza krawędź).
     let slots = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
-            Constraint::Percentage(100 / COMMAND_COUNT as u16);
+            Constraint::Ratio(1, COMMAND_COUNT as u32);
             COMMAND_COUNT
         ])
         .split(area);
