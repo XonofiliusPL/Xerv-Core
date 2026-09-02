@@ -3,6 +3,7 @@
 //! Zakres: błędy, wersja API, konfiguracja, logowanie, stan, lifecycle.
 //! Poza zakresem: TUI, CLI, pluginy, moduły, agenci, sieć, integracje.
 
+pub mod api;
 pub mod config;
 pub mod core;
 pub mod error;
