@@ -1,0 +1,19 @@
+[package]
+name = "xerv-tui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Xerv TUI — first skeleton, consumer of xerv-core"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "xerv-tui"
+path = "src/main.rs"
+
+[dependencies]
+xerv-core = { path = "../xerv-core" }
+ratatui = "0.30"
+crossterm = "0.29"
+
+[dev-dependencies]
+tempfile = "3"
