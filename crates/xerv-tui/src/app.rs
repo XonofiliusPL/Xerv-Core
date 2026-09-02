@@ -34,7 +34,10 @@ pub struct App {
 impl App {
     /// Tworzy `App` z natychmiastową inicjalizacją `XervCore` (decyzja 3.7b).
     /// Zwraca błąd inicjalizacji Rdzenia; `main.rs` propaguje i wychodzi z kodem 1.
-    pub fn try_new(config: CoreConfig, state_path: std::path::PathBuf) -> xerv_core::api::ApiResult<Self> {
+    pub fn try_new(
+        config: CoreConfig,
+        state_path: std::path::PathBuf,
+    ) -> xerv_core::api::ApiResult<Self> {
         let core = XervCore::new(config, state_path)?;
         Ok(Self {
             core,
