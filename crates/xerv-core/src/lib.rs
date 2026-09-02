@@ -4,4 +4,6 @@
 //! Poza zakresem: TUI, CLI, pluginy, moduły, agenci, sieć, integracje.
 
 pub mod error;
+pub mod version;
 pub use error::{Error, Result};
+pub use version::{api_version, API_VERSION};
