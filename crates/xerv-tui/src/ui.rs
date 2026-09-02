@@ -72,6 +72,18 @@ fn short_path(path: &std::path::Path, max_segments: usize) -> String {
     format!("…/{}", kept.join("/"))
 }
 
+/// Człowiekowo-czytelna data z unixa (lokalna, bez zewnętrznych crate'ów).
+fn unix_to_human(unix: u64) -> String {
+    // Bez chrono — liczymy dzień/godzinę względem epoki w formacie skróconym:
+    // dni od epoki + HH:MM. To nie jest pełna data kalendarzowa, ale czytelne
+    // "D+NNNN HH:MM" (dni od startu systemu uniksowego) — wystarcza do debug.
+    let days = unix / 86_400;
+    let rem = unix % 86_400;
+    let hh = rem / 3600;
+    let mm = (rem % 3600) / 60;
+    format!("D+{days} {hh:02}:{mm:02}")
+}
+
 /// Człowiekowo-czytelny uptime.
 fn format_uptime(started_at_unix: u64) -> String {
     let now = SystemTime::now()
@@ -234,7 +246,7 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
 
 // ---- dashboard -----------------------------------------------------------------
 
-/// Gęsty dashboard: pasek statusu + grid 3 kart. Zwraca obszary kart.
+/// Gęsty dashboard: pasek statusu + karty. Zwraca obszary kart.
 fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -245,47 +257,49 @@ fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Ar
     draw_cards(f, chunks[1], app)
 }
 
-/// Jednolinijkowy pasek statusu wewnątrz dashboardu (gęsta informacja).
+/// Jednolinijsowy pasek statusu: grupy oddzielone dim separatorami,
+/// kolor tylko semantyczny (status) — akcenty zostają dla kart.
 fn draw_status_strip(f: &mut Frame, area: Rect, app: &App) {
     let shutdown = app.core.is_shutdown();
     let st = app.core.state();
     let api = app.core.api_version();
 
-    let status_span = if shutdown {
-        Span::styled(
-            "● SHUTDOWN",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )
+    let status = if shutdown {
+        Line::from(vec![
+            Span::styled("● ", Style::default().fg(Color::Red)),
+            Span::styled(
+                "CORE SHUTDOWN",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+        ])
     } else {
-        Span::styled(
-            "● READY",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
+        Line::from(vec![
+            Span::styled("● ", Style::default().fg(Color::Green)),
+            Span::styled(
+                "CORE READY",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
     };
 
-    let line = Line::from(vec![
-        Span::raw(" "),
-        status_span,
-        Span::styled("  api ", label_style()),
-        Span::styled(
-            format!("{}.{}.{}", api.major, api.minor, api.patch),
-            Style::default().fg(Color::Magenta),
-        ),
-        Span::styled("  boot #", label_style()),
-        Span::styled(
-            st.boot_count.to_string(),
-            Style::default().fg(Color::Magenta),
-        ),
-        Span::styled("  uptime ", label_style()),
-        Span::styled(
-            format_uptime(st.started_at_unix),
-            Style::default().fg(Color::Magenta),
-        ),
-    ]);
+    let label = |t: &str| Span::styled(format!("{t} "), label_style());
+    let value = |t: String| Span::raw(t);
 
-    f.render_widget(Paragraph::new(line), area);
+    let mut line_spans = vec![Span::raw(" ")];
+    line_spans.extend(status.spans);
+    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(label("api"));
+    line_spans.push(value(format!("{}.{}.{}", api.major, api.minor, api.patch)));
+    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(label("boot #"));
+    line_spans.push(value(st.boot_count.to_string()));
+    line_spans.push(Span::styled("  │  ", label_style()));
+    line_spans.push(label("uptime"));
+    line_spans.push(value(format_uptime(st.started_at_unix)));
+
+    f.render_widget(Paragraph::new(Line::from(line_spans)), area);
 }
 
 /// Grid kart: lewa kolumna (system/storage), prawa (runtime + state).
@@ -309,66 +323,70 @@ fn draw_cards(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)>
     let cfg = app.core.config();
     let st = app.core.state();
     let api = app.core.api_version();
+    let shutdown = app.core.is_shutdown();
 
-    // Karta 1: System.
+    // Karta 1: System — grupa "identity" + separator + grupa "storage/log".
     let sys_lines = vec![
         kv(
             "api version",
             &format!("{}.{}.{}", api.major, api.minor, api.patch),
-            Color::Magenta,
         ),
-        kv("data dir", &short_path(&cfg.data_dir, 2), Color::Cyan),
-        kv("state file", &cfg.state_filename, Color::Cyan),
-        kv("log level", &cfg.log_level, Color::Cyan),
+        kv("schema", &format!("v{}", st.schema_version)),
+        separator_line(),
+        kv("data dir", &short_path(&cfg.data_dir, 2)),
+        kv("state file", &cfg.state_filename),
+        kv("log level", &cfg.log_level),
     ];
-    render_card(
-        f,
-        card_chunks[0],
-        "system",
-        sys_lines,
-        false,
-        false,
-        &mut areas,
-    );
+    render_card(f, card_chunks[0], "system", sys_lines, &mut areas);
 
-    // Karta 2: Runtime/State.
+    // Karta 2: Runtime — lifecycle; szczegóły, których nie ma w stripie.
     let run_lines = vec![
-        kv("schema", &format!("v{}", st.schema_version), Color::Magenta),
-        kv("boot count", &st.boot_count.to_string(), Color::Magenta),
-        kv("uptime", &format_uptime(st.started_at_unix), Color::Magenta),
-        kv(
-            "status",
-            if app.core.is_shutdown() {
-                "SHUTDOWN"
-            } else {
-                "READY"
-            },
-            if app.core.is_shutdown() {
-                Color::Red
-            } else {
-                Color::Green
-            },
-        ),
+        kv("boot count", &st.boot_count.to_string()),
+        kv("first boot", &unix_to_human(st.started_at_unix)),
+        separator_line(),
+        status_kv(shutdown),
     ];
-    render_card(
-        f,
-        card_chunks[1],
-        "runtime",
-        run_lines,
-        false,
-        false,
-        &mut areas,
-    );
+    render_card(f, card_chunks[1], "runtime", run_lines, &mut areas);
 
     areas
 }
 
-/// Jedna para etykieta→wartość.
-fn kv<'a>(label: &str, value: &str, value_color: Color) -> Line<'a> {
+/// Cienki separator wewnątrz karty (dim).
+fn separator_line() -> Line<'static> {
+    Line::from(Span::styled(
+        "  ························",
+        Style::default().fg(Color::DarkGray),
+    ))
+}
+
+/// Wiersz statusu z semantycznym kolorem (green/red).
+fn status_kv(shutdown: bool) -> Line<'static> {
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(format!("{:<12}", "status"), label_style()),
+        if shutdown {
+            Span::styled(
+                "● SHUTDOWN",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(
+                "● READY",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )
+        },
+    ])
+}
+
+/// Para etykieta→wartość. Etykieta dim, wartość neutralna (default fg) —
+/// akcenty (cyan/magenta) nie dominują; czytelność ponad dekorację.
+fn kv<'a>(label: &str, value: &str) -> Line<'a> {
     Line::from(vec![
         Span::raw("  "),
         Span::styled(format!("{label:<12}"), label_style()),
-        Span::styled(value.to_string(), Style::default().fg(value_color)),
+        Span::raw(value.to_string()),
     ])
 }
 
@@ -378,11 +396,9 @@ fn render_card(
     area: Rect,
     title: &'static str,
     lines: Vec<Line<'static>>,
-    _active: bool,
-    _hovered: bool,
     areas: &mut Vec<(&'static str, Area)>,
 ) {
-    let block = card_block(title, _active, _hovered);
+    let block = card_block(title, false, false);
     let p = Paragraph::new(lines).block(block);
     f.render_widget(p, area);
     areas.push((title, to_area(area)));
@@ -405,22 +421,24 @@ fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
 
     for (i, name) in COMMANDS.iter().enumerate() {
         let selected = app.selected_command == i;
-        let style = if selected {
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::REVERSED | Modifier::BOLD)
+        // Aktywny slot: cyan ramka + bold cyan tekst (bez REVERSED —
+        // czytelniejszy i mniej agresywny niż pełna inwersja).
+        let (border, text) = if selected {
+            (
+                Style::default().fg(Color::Cyan),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
-            Style::default().fg(Color::DarkGray)
+            (
+                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::DarkGray),
+            )
         };
         let label = format!(" {} ", name);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(if selected {
-                Style::default().fg(Color::Cyan)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            });
-        let p = Paragraph::new(Line::from(Span::styled(label, style))).block(block);
+        let block = Block::default().borders(Borders::ALL).border_style(border);
+        let p = Paragraph::new(Line::from(Span::styled(label, text))).block(block);
         f.render_widget(p, slots[i]);
     }
 }
