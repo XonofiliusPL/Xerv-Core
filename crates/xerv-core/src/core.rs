@@ -10,6 +10,7 @@ use crate::{Error, Result};
 /// Główna instancja Rdzenia. Posiada konfigurację i stan, udostępnia `shutdown`.
 ///
 /// Lifecycle: `XervCore::new(...)` → użycie → `shutdown()`.
+#[derive(Debug)]
 pub struct XervCore {
     config: CoreConfig,
     state: Mutex<CoreState>,
