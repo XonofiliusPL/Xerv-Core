@@ -7,7 +7,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 use xerv_core::api::CoreConfig;
-use xerv_tui::app::{App, Area, COMMANDS, COMMAND_COUNT, SIDEBAR_COUNT, SIDEBAR_ITEMS};
+use xerv_tui::app::{App, Area, Panel, COMMANDS, COMMAND_COUNT, SIDEBAR_COUNT, SIDEBAR_ITEMS};
 use xerv_tui::event::Event;
 use xerv_tui::ui::ui;
 
@@ -936,5 +936,185 @@ fn nav_model_render_matches_state_after_full_sequence() {
     assert!(
         !side_row(&lines, "Agents").contains('▎'),
         "Agents must not show cursor marker when cursor is at Projects"
+    );
+}
+
+// ---- mouse flow tests --------------------------------------------------------------
+//
+// Testy rzeczywistego przepływu zdarzeń: MouseMove → Event::Hover → on_hover,
+// Left Click → Event::ClickPanel → on_click → render. Wszystko w TestBackend
+// (brak crossterm) — testujemy logikę stanu, a nie capture.
+
+#[test]
+fn mouse_hover_command_bar_sets_hovered_command() {
+    // MouseMove nad command bar → hovered_command != None, selected nie zmienia się.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let bar = app.command_bar_area.expect("command bar area");
+    let col = bar.x + bar.w / 2; // środek bara (slot 2-3)
+    let row = bar.y + bar.h / 2;
+    app.handle_event(Event::Hover(col, row));
+    assert!(
+        app.hovered_command.is_some(),
+        "hover over command bar must register hovered_command"
+    );
+    // selected nie powinno się zmienić z samego hoveru.
+    assert_eq!(
+        app.selected_command, 0,
+        "hover must not change selected_command"
+    );
+}
+
+#[test]
+fn mouse_hover_sidebar_sets_side_hover() {
+    // MouseMove nad sidebar → side_hover != None, active/cursor nie zmieniają się.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let side = app.side_area.expect("side area");
+    let hover_row = side.y + 2 + 3; // Services (idx 3)
+    app.handle_event(Event::Hover(side.x + 2, hover_row));
+    assert_eq!(
+        app.side_hover,
+        Some(3),
+        "hover over sidebar item 3 must register"
+    );
+    assert_eq!(app.side_active, 0, "hover must not change active");
+    assert_eq!(app.side_cursor, 0, "hover must not change cursor");
+}
+
+#[test]
+fn mouse_hover_dashboard_card_sets_dashboard_hover() {
+    // MouseMove nad kartą agent → dashboard_hover = Some("agent").
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 80, 24);
+    let agent_card = app
+        .card_areas
+        .iter()
+        .find(|(n, _)| *n == "agent")
+        .map(|(_, a)| *a)
+        .expect("agent card area");
+    let col = agent_card.x + agent_card.w / 2;
+    let row = agent_card.y + agent_card.h / 2;
+    app.handle_event(Event::Hover(col, row));
+    assert_eq!(
+        app.dashboard_hover,
+        Some("agent"),
+        "hover over agent card must set dashboard_hover"
+    );
+    // Aktywny slot (keyboard) nie powinien się zmienić.
+    assert_eq!(
+        app.selected_command, 0,
+        "hover must not change selected_command"
+    );
+}
+
+#[test]
+fn mouse_click_command_bar_activates_slot_and_hovers_too() {
+    // Left Click na slocie 3 → selected_command = 3, hovered = Some(3).
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let bar = app.command_bar_area.expect("command bar area");
+    let slot_w = bar.w / COMMAND_COUNT as u16;
+    let col = bar.x + slot_w * 3 + slot_w / 2;
+    let row = bar.y + bar.h / 2;
+    app.handle_event(Event::ClickCommand(col, row));
+    assert_eq!(app.selected_command, 3, "click must set selected_command");
+    assert_eq!(
+        app.hovered_command,
+        Some(3),
+        "click must also set hovered (synchronised state)"
+    );
+    assert_eq!(app.active_panel, Panel::Main, "click on command bar → Main");
+}
+
+#[test]
+fn mouse_click_sidebar_activates_and_hovers_item() {
+    // Left Click na sidebar "Projects" (idx 2) → side_active=2, side_cursor=2, side_hover=2.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let side = app.side_area.expect("side area");
+    let click_row = side.y + 2 + 2;
+    app.handle_event(Event::ClickPanel(side.x + 2, click_row));
+    assert_eq!(app.side_active, 2, "click sets active to Projects");
+    assert_eq!(app.side_cursor, 2);
+    assert_eq!(app.side_hover, Some(2));
+    assert_eq!(app.active_panel, Panel::Side);
+}
+
+#[test]
+fn mouse_hover_outside_all_areas_clears_all_hovers() {
+    // MouseMove w prawym dolnym rogu (poza wszystkimi obszarami) → wszystkie None.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    // Ustaw najpierw jakiś hover, potem wyjdź poza wszystkie obszary.
+    let side = app.side_area.expect("side area");
+    app.handle_event(Event::Hover(side.x + 2, side.y + 3));
+    assert!(app.side_hover.is_some());
+    app.handle_event(Event::Hover(200, 200)); // poza
+    assert_eq!(app.side_hover, None, "hover outside sidebar must clear");
+    assert_eq!(
+        app.hovered_command, None,
+        "hover outside command bar must clear"
+    );
+    assert_eq!(
+        app.dashboard_hover, None,
+        "hover outside dashboard must clear"
+    );
+}
+
+#[test]
+fn mouse_hover_command_bar_slot_renders_magenta_not_cyan() {
+    // Hover nad slotem 2 → border magenta (mimo selected=0 niebieskim).
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    let _ = render_lines(&mut app, 120, 24);
+    let bar = app.command_bar_area.expect("command bar area");
+    let slot_w = bar.w / COMMAND_COUNT as u16;
+    // Hover w slot 2 (registry) — nie selected.
+    let col = bar.x + slot_w * 2 + slot_w / 2;
+    let row = bar.y + bar.h / 2;
+    app.handle_event(Event::Hover(col, row));
+    assert_eq!(app.hovered_command, Some(2));
+    assert_ne!(app.selected_command, 2, "hover must not select");
+    // Re-render i sprawdź styl wewnętrznej treści slotu 2 — magenta.
+    let styles = cell_styles(&mut app, 120, 24);
+    let st = styles[row as usize][col as usize];
+    assert_eq!(
+        st.fg,
+        Some(Color::Magenta),
+        "hovered command slot text must be magenta, got {:?}",
+        st.fg
+    );
+}
+
+#[test]
+fn mouse_click_dashboard_card_focuses_main_panel() {
+    // Klik w kartę agent → active_panel = Main, dashboard_hover = Some("agent").
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    app.active_panel = Panel::Side; // najpierw Side
+    let _ = render_lines(&mut app, 80, 24);
+    let agent = app
+        .card_areas
+        .iter()
+        .find(|(n, _)| *n == "agent")
+        .map(|(_, a)| *a)
+        .expect("agent card");
+    app.handle_event(Event::ClickPanel(agent.x + 1, agent.y + 1));
+    assert_eq!(
+        app.active_panel,
+        Panel::Main,
+        "click on dashboard card → Main focus"
+    );
+    assert_eq!(
+        app.dashboard_hover,
+        Some("agent"),
+        "click on card must register as hover target"
     );
 }

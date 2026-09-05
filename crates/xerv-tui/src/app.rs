@@ -239,6 +239,10 @@ pub struct App {
     pub side_cursor: usize,
     /// Indeks pozycji na którą mysz wskazuje (magenta hover). None = brak hoveru.
     pub side_hover: Option<usize>,
+    /// Indeks hoverowanego slocie command baru (magenta hover, nie zmienia selected).
+    pub hovered_command: Option<usize>,
+    /// Nazwa hoverowanej karty dashboardu (magenta hover na ramce). None = brak hoveru.
+    pub dashboard_hover: Option<&'static str>,
     /// Obszary cards (wypełniane przez ui::ui, czytane przez on_mouse).
     pub card_areas: Vec<(&'static str, Area)>,
     pub command_bar_area: Option<Area>,
@@ -389,6 +393,8 @@ impl App {
             side_active: DEFAULT_SIDE_ACTIVE,
             side_cursor: DEFAULT_SIDE_ACTIVE,
             side_hover: None,
+            hovered_command: None,
+            dashboard_hover: None,
             card_areas: Vec::new(),
             command_bar_area: None,
             side_area: None,
@@ -451,6 +457,7 @@ impl App {
                 let rel = col.saturating_sub(rect.x) / slot_w;
                 let idx = (rel as usize).min(COMMAND_COUNT - 1);
                 self.selected_command = idx;
+                self.hovered_command = Some(idx);
                 self.active_panel = Panel::Main;
                 return;
             }
@@ -465,38 +472,53 @@ impl App {
                 return;
             }
         }
-        // Main
+        // Main (dashboard cards, terminal, activity) — klik aktywuje panel,
+        // a hover rejestruje kartę na której kliknięto.
         if let Some(rect) = self.main_area {
             if rect.contains(col, row) {
                 self.active_panel = Panel::Main;
+                // Hit-test na karty dashboardu — klik == hover na tej karcie.
+                self.dashboard_hover = self
+                    .card_areas
+                    .iter()
+                    .find(|(_, r)| r.contains(col, row))
+                    .map(|(name, _)| *name);
             }
         }
     }
 
     /// Aktualizuje hover na podstawie pozycji myszy.
+    /// Hover jest *czystym nakładnikiem wizualnym* — nie zmienia active/cursor.
     pub fn on_hover(&mut self, col: u16, row: u16) {
-        // Command bar — tylko aktualizacja stanów karty (pospolity stan,
-        // bez polegania na usuniętych polach hovered_command/hovered_card).
-        let _cmd_hover: Option<Area> = self.command_bar_area.filter(|rect| rect.contains(col, row));
+        // Command bar — indeks slocie pod kursorem.
+        self.hovered_command = self
+            .command_bar_area
+            .filter(|rect| rect.contains(col, row))
+            .and_then(|rect| {
+                if rect.w == 0 {
+                    return None;
+                }
+                let slot_w = rect.w / COMMAND_COUNT as u16;
+                if slot_w == 0 {
+                    return None;
+                }
+                let rel = col.saturating_sub(rect.x) / slot_w;
+                let idx = (rel as usize).min(COMMAND_COUNT - 1);
+                Some(idx)
+            });
 
         // Sidebar — hover nad pozycją (magenta), nie zmienia aktywnej.
-        let mut side_hover: Option<usize> = None;
-        if let Some(_rect) = self.side_area {
-            if let Some(idx) = self.side_index_at(col, row) {
-                side_hover = Some(idx);
-            }
-        }
-        self.side_hover = side_hover;
+        self.side_hover = self.side_area.and_then(|rect| {
+            let _ = rect; // rect używany w side_index_at
+            self.side_index_at(col, row)
+        });
 
-        // Cards (pierwszy rect, który zawiera punkt)
-        let mut card_hover: Option<Area> = None;
-        for (_name, rect) in &self.card_areas {
-            if rect.contains(col, row) {
-                card_hover = Some(*rect);
-                break;
-            }
-        }
-        let _card_hover = card_hover;
+        // Dashboard cards — nazwa karty pod kursorem.
+        self.dashboard_hover = self
+            .card_areas
+            .iter()
+            .find(|(_, rect)| rect.contains(col, row))
+            .map(|(name, _)| *name);
     }
 
     pub fn handle_event(&mut self, ev: Event) {

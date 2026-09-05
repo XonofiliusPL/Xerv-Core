@@ -385,7 +385,7 @@ fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Ar
     let ws = &app.workspace;
     if has_tree {
         draw_agent_card(f, chunks[1], ws, app, &mut areas);
-        draw_workspace_tree_card(f, chunks[2], ws, &mut areas);
+        draw_workspace_tree_card(f, chunks[2], ws, app, &mut areas);
         draw_terminal_placeholder(f, chunks[3]);
         if has_activity {
             draw_last_activity(f, chunks[4], app);
@@ -407,6 +407,7 @@ fn draw_agent_card(
 ) {
     let agent = &ws.agents[ws.active_agent.min(ws.agents.len().saturating_sub(1))];
     let is_active = app.active_panel == Panel::Main;
+    let is_hovered = app.dashboard_hover == Some("agent");
 
     let lines = vec![
         kv_accent("agent", &agent.name),
@@ -415,7 +416,7 @@ fn draw_agent_card(
         kv("uptime", &agent.uptime.format()),
         kv("task", &agent.current_task),
     ];
-    render_card_named(f, area, "agent", lines, is_active, false, areas);
+    render_card_named(f, area, "agent", lines, is_active, is_hovered, areas);
 }
 
 /// Karta drzewa workspace — hierarchia: Project → Worktree → Session → Agent.
@@ -423,6 +424,7 @@ fn draw_workspace_tree_card(
     f: &mut Frame,
     area: Rect,
     ws: &WorkspaceModel,
+    app: &App,
     areas: &mut Vec<(&'static str, Area)>,
 ) {
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -454,7 +456,15 @@ fn draw_workspace_tree_card(
         kv_indent_marker(&mut lines, 1, "agent", &agent.name, marker);
     }
 
-    render_card_named(f, area, "workspace", lines, false, false, areas);
+    render_card_named(
+        f,
+        area,
+        "workspace",
+        lines,
+        false,
+        app.dashboard_hover == Some("workspace"),
+        areas,
+    );
 }
 
 /// Placeholder terminalu — miejsce na przyszły terminal.
@@ -706,15 +716,14 @@ fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
 
     for (i, action) in COMMAND_ACTIONS.iter().enumerate() {
         let selected = app.selected_command == i;
-        // Aktywny slot: cyan ramka + bold cyan tekst (bez REVERSED).
-        // Nieaktywny: muted. Placeholder (ready=false) dodatkowo przyciemniony.
+        let hovered = app.hovered_command == Some(i);
+        // Hierarchia: selected (keyboard focus — cyan) > hovered (mouse — magenta) > spoczynek (muted).
+        // Hover nie zmienia `selected` — czysty nakładnik wizualny.
         let (border, text) = if selected {
             (accent_primary(), accent_primary_bold())
+        } else if hovered {
+            (accent_secondary(), accent_secondary())
         } else {
-            // Nieaktywny slot: muted. Placeholder (ready=false) także muted —
-            // brak jeszcze implementowanej akcji nie różni się wizualnie,
-            // dopóki nie ma interakcji. Stylistyczna hierarchia pozostaje
-            // zachowana (muted = nieaktywny, cyan = aktywny).
             (muted_style(), muted_style())
         };
 
