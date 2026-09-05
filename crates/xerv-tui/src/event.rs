@@ -1,8 +1,12 @@
 use crossterm::event::{
-    self as ct_event, Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent,
-    MouseEventKind,
+    self as ct_event, Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent,
 };
 
+/// Zdarzenia akcyjne (wejścia) obsługiwane przez aplikację.
+///
+/// Każdy wariant mapuje się 1:1 na akcję `App::handle_event`. Zdarzenia myszy
+/// (`Hover`/`Click`) są tworzone w `From<MouseEvent>` i przekazywane bezpośrednio
+/// — hit-test odbywa się w `App::handle_event`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
     Quit,
@@ -22,15 +26,31 @@ pub enum Event {
     NavHome,
     /// Ostatnia pozycja (End).
     NavEnd,
-    /// Kliknięcie myszą na współrzędnej (col, row) — Panel.
-    ClickPanel(u16, u16),
-    /// Kliknięcie myszą na współrzędnej (col, row) — Command bar.
-    ClickCommand(u16, u16),
-    /// Ruch myszy na (col, row) — aktualizuje highlight.
+    /// Ruch myszy na (col, row) — aktualizuje highlight (czysty nakładnik).
     Hover(u16, u16),
+    /// Kliknięcie myszą na (col, row) — hit-test na bieżąco w `App::handle_event`.
+    Click(u16, u16),
     Tick,
 }
 
+/// Konwersja z `crossterm::event::MouseEvent` → `Event`.
+///
+/// MouseMove → `Hover`, Left Click → `Click`, inne przyciski/ruchy → `Tick`
+/// (ignorowany — nie ma right-click/context menu).
+impl From<MouseEvent> for Event {
+    fn from(m: MouseEvent) -> Self {
+        let (col, row) = (m.column, m.row);
+        match m.kind {
+            crossterm::event::MouseEventKind::Moved => Event::Hover(col, row),
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                Event::Click(col, row)
+            }
+            _ => Event::Tick,
+        }
+    }
+}
+
+/// Czyta następny event wejściowy, ignoruje `KeyEventKind::Release`.
 pub fn read_event() -> std::io::Result<Event> {
     loop {
         let ev = ct_event::read()?;
@@ -58,22 +78,8 @@ pub fn read_event() -> std::io::Result<Event> {
                     _ => continue,
                 });
             }
-            CtEvent::Mouse(m) => return Ok(mouse_to_event(m)),
+            CtEvent::Mouse(m) => return Ok(m.into()),
             _ => continue,
         }
-    }
-}
-
-fn mouse_to_event(m: MouseEvent) -> Event {
-    let (col, row) = (m.column, m.row);
-    match m.kind {
-        MouseEventKind::Down(MouseButton::Left) => {
-            // Heurystyka: kto żyje wyżej? Decyzja w main.rs (App::on_mouse)
-            // wie gdzie są panele; tu przekazujemy surowe współrzędne.
-            // Rozróżnienie panel-vs-command robi wywołujący.
-            Event::ClickPanel(col, row)
-        }
-        MouseEventKind::Moved => Event::Hover(col, row),
-        _ => Event::Tick,
     }
 }

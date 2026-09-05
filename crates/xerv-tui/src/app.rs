@@ -1,307 +1,115 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use xerv_core::api::{CoreConfig, XervCore};
 
 use crate::event::Event;
 
-// ---- Agent Workspace data model (Point 3) ----------------------------------------
+// ---- Core UI model ----------------------------------------------------------------
 //
-// Minimalny model stanu potrzebny do wyświetlenia Agent Workspace w TUI.
-// Dane są czyste struktury (Serializable) — nie zależą od ratatui.
-// `demo()` dostarcza placeholderowe dane demonstracyjne; prawdziwa integracja
-// z Hermesem / agentami przyjdzie w późniejszych punktach.
+// Xerv Core UI ma trzy główne panele (CorePanel), któremi użytkownik
+// przechodzi sekwencyjnie: Install → Onboarding → Main. Po zakończeniu
+// podstawowego przygotowania Core trafia do Main — samodzielnego panelu
+// ze stanem Rdzenia. Sidebar nawiguje pomiędzy CorePanel a pozycjami
+// nawigacji (Addons, Settings, Help, Exit).
 
-/// Stan czasu trwania agenta — mapowany na human-readable uptime.
+/// Główne panele Xerv Core — sekwencja startowa Install → Onboarding → Main.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentStatus {
-    /// Agent jest aktywnie pracujący.
-    Running,
-    /// Agent jest wstrzymany (oczekuje na interakcję).
-    Idle,
-    /// Agent dokończył pracę.
-    Done,
-    /// Agent się wyłamał.
-    Error,
+pub enum CorePanel {
+    /// Instalacja/podstawowa konfiguracja — progres przygotowania Core.
+    Install,
+    /// Onboarding — progres konfiguracji Core (config/state ready).
+    Onboarding,
+    /// Główny panel — pełny stan Core po zakończeniu przygotowania.
+    Main,
 }
 
-impl AgentStatus {
-    /// Jednoliterowy znacznik UI (spójny z DESIGN.md — semantyka statusu).
-    pub fn marker(self) -> &'static str {
+impl CorePanel {
+    /// Następny panel w sekwencji startowej (z uwzględnieniem, że po Main
+    /// nie ma dalej — zwraca sam siebie).
+    pub fn next(self) -> Self {
         match self {
-            AgentStatus::Running => "●",
-            AgentStatus::Idle => "○",
-            AgentStatus::Done => "✓",
-            AgentStatus::Error => "✗",
-        }
-    }
-
-    /// Czy status jest "pozytywny" (green) czy negatywny (red).
-    pub fn is_ok(self) -> bool {
-        matches!(
-            self,
-            AgentStatus::Running | AgentStatus::Idle | AgentStatus::Done
-        )
-    }
-}
-
-/// Czas działania agenta jako sekfundy od startu.
-///
-/// `started_at_unix` to unix timestamp startu; obliczamy uptime w locie.
-#[derive(Debug, Clone, Copy)]
-pub struct AgentUptime {
-    started_at_unix: u64,
-}
-
-impl AgentUptime {
-    pub fn new(started_at_unix: u64) -> Self {
-        Self { started_at_unix }
-    }
-
-    /// Czytelny uptime: `12s`, `3m7s`, `2h15m`, `5d3h`.
-    pub fn format(&self) -> String {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(self.started_at_unix);
-        let secs = now.saturating_sub(self.started_at_unix);
-        if secs < 60 {
-            format!("{secs}s")
-        } else if secs < 3600 {
-            format!("{}m{}s", secs / 60, secs % 60)
-        } else if secs < 86_400 {
-            format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
-        } else {
-            format!("{}d{}h", secs / 86_400, (secs % 86_400) / 3600)
+            CorePanel::Install => CorePanel::Onboarding,
+            CorePanel::Onboarding => CorePanel::Main,
+            CorePanel::Main => CorePanel::Main,
         }
     }
 }
 
-/// Model stanu pojedynczego agenta w workspace.
-#[derive(Debug, Clone)]
-pub struct AgentInfo {
-    pub name: String,
-    pub status: AgentStatus,
-    pub model: String,
-    pub uptime: AgentUptime,
-    pub current_task: String,
-}
-
-/// Typy worktree'ów (placeholder — brak integracji git na tym etapie).
+/// Krok w progresie Install/Onboarding — label + `done` (tylko faktycznie
+/// gotowe kroki mają `done = true`; reszta to placeholder dla przyszłych
+/// implementacji, nie udawana gotowość).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorktreeKind {
-    /// Worktree to bieżący katalog projektu.
-    Current,
-    /// Worktree to odlotowany (detached).
-    Detached,
-    /// Worktree to feature branch.
-    Branch,
+pub struct Step {
+    pub label: &'static str,
+    pub done: bool,
 }
 
-/// Pojedynczy worktree projektu.
-#[derive(Debug, Clone)]
-pub struct WorktreeInfo {
-    pub path: String,
-    pub kind: WorktreeKind,
-    pub active: bool,
-}
+/// Kroki instalacji Core (placeholdery dla przyszłych integracji).
+pub const INSTALL_STEPS: [Step; 2] = [
+    Step {
+        label: "core init",
+        done: true,
+    },
+    Step {
+        label: "config ready",
+        done: false,
+    },
+];
 
-/// Model projektu w ramach workspace.
-#[derive(Debug, Clone)]
-pub struct ProjectInfo {
-    pub name: String,
-    pub worktrees: Vec<WorktreeInfo>,
-}
-
-/// Model sesji TUI — grupuje otwarte session-y.
-#[derive(Debug, Clone)]
-pub struct SessionInfo {
-    pub name: String,
-    pub active: bool,
-}
-
-/// Pełny model workspace — hierarchia danych demodelowych dla głównego panelu.
-///
-/// Hierarchia: Workspace → Project → Worktree → Session → Agent
-#[derive(Debug, Clone)]
-pub struct WorkspaceModel {
-    /// Nazwa bieżącego workspace.
-    pub workspace_name: String,
-    /// Lista projektów w workspace.
-    pub projects: Vec<ProjectInfo>,
-    /// Aktywna sesja TUI.
-    pub active_session: Option<usize>,
-    /// Lista otwartych sesji.
-    pub sessions: Vec<SessionInfo>,
-    /// Aktywny agent (index do `agents`).
-    pub active_agent: usize,
-    /// Lista agentów w workspace (placeholder dane).
-    pub agents: Vec<AgentInfo>,
-}
-
-impl WorkspaceModel {
-    /// Placeholder dane demonstracyjne — pełny workspace z jednym projektem,
-    /// dwoma worktree'ami, jedną sesją i dwoma agentami (jeden aktywny).
-    pub fn demo() -> Self {
-        Self {
-            workspace_name: "~/Work/xerv".to_string(),
-            projects: vec![ProjectInfo {
-                name: "xerv".to_string(),
-                worktrees: vec![
-                    WorktreeInfo {
-                        path: "~/Work/xerv".to_string(),
-                        kind: WorktreeKind::Current,
-                        active: true,
-                    },
-                    WorktreeInfo {
-                        path: "~/Work/xerv/.wt/docs".to_string(),
-                        kind: WorktreeKind::Branch,
-                        active: false,
-                    },
-                ],
-            }],
-            active_session: Some(0),
-            sessions: vec![SessionInfo {
-                name: "main".to_string(),
-                active: true,
-            }],
-            active_agent: 0,
-            agents: vec![
-                AgentInfo {
-                    name: "hermes-planner".to_string(),
-                    status: AgentStatus::Running,
-                    model: "claude-3-7-sonnet".to_string(),
-                    uptime: AgentUptime::new(
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0)
-                            - 7200,
-                    ),
-                    current_task: "Implement Goal 3: Agent Workspace UI".to_string(),
-                },
-                AgentInfo {
-                    name: "claude-coder".to_string(),
-                    status: AgentStatus::Idle,
-                    model: "claude-3-7-sonnet".to_string(),
-                    uptime: AgentUptime::new(
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0)
-                            - 300,
-                    ),
-                    current_task: "(idle — awaiting task)".to_string(),
-                },
-            ],
-        }
-    }
-}
-
-/// Wpisy w sekcji "last activity" (dane demonstracyjne).
-#[derive(Debug, Clone)]
-pub struct ActivityEntry {
-    pub timestamp: String,
-    pub content: String,
-}
-
-impl ActivityEntry {
-    pub fn demo_entries() -> Vec<Self> {
-        vec![
-            ActivityEntry {
-                timestamp: "2026-09-04 14:02".to_string(),
-                content: "hermes-planner · task complete: refactor app.rs".to_string(),
-            },
-            ActivityEntry {
-                timestamp: "2026-09-04 13:57".to_string(),
-                content: "claude-coder · spawned for workspace sync".to_string(),
-            },
-            ActivityEntry {
-                timestamp: "2026-09-04 13:51".to_string(),
-                content: "hermes-planner · status: running (idle)".to_string(),
-            },
-        ]
-    }
-}
-
-/// Model stanu aplikacji TUI — rozszerzony o workspace model.
-///
-/// Pola istniejące z Punktu 3 (panel, nawigacja) zachowane.
-/// Nowe pole `workspace` trzyma dane demodelowane dla Agent Workspace.
-#[derive(Debug)]
-pub struct App {
-    pub core: XervCore,
-    pub active_panel: Panel,
-    pub should_quit: bool,
-    pub selected_command: usize,
-    /// Aktywna pozycja sidebaru (cyan). Zmienia się przez klik/myś/hom/end/enter.
-    pub side_active: usize,
-    /// Kursor nawigacji sidebaru (↑/↓/klik/hover) — wyróżnienie białe.
-    pub side_cursor: usize,
-    /// Indeks pozycji na którą mysz wskazuje (magenta hover). None = brak hoveru.
-    pub side_hover: Option<usize>,
-    /// Indeks hoverowanego slocie command baru (magenta hover, nie zmienia selected).
-    pub hovered_command: Option<usize>,
-    /// Nazwa hoverowanej karty dashboardu (magenta hover na ramce). None = brak hoveru.
-    pub dashboard_hover: Option<&'static str>,
-    /// Obszary cards (wypełniane przez ui::ui, czytane przez on_mouse).
-    pub card_areas: Vec<(&'static str, Area)>,
-    pub command_bar_area: Option<Area>,
-    pub side_area: Option<Area>,
-    pub main_area: Option<Area>,
-    /// Model danych Agent Workspace (Punkt 3). Dane demo.
-    pub workspace: WorkspaceModel,
-    /// Wpisy ostatniej aktywności (dane demo).
-    pub activity: Vec<ActivityEntry>,
-}
+/// Kroki onboardingu Core. `core init` i `config ready` są gotowe
+/// (Core faktycznie je posiada); `workspace ready` i `system ready` są
+/// placeholderami na przyszłe implementacje — `done = false`.
+pub const ONBOARDING_STEPS: [Step; 4] = [
+    Step {
+        label: "core init",
+        done: true,
+    },
+    Step {
+        label: "config ready",
+        done: true,
+    },
+    Step {
+        label: "workspace ready",
+        done: true,
+    },
+    Step {
+        label: "system ready",
+        done: false,
+    },
+];
 
 /// Akcja w Command Barze — prezentuje dostępne akcje dla bieżącego kontekstu.
 ///
 /// Command Bar nie jest drugą listą nawigacji — to pasek akcji, który
-/// komplementuje Sidebar (główna nawigacja) i przygotowuje UI pod przyszłe
-/// akcje agenta/workspace.
+/// komplementuje Sidebar i przygotowuje UI pod przyszłe akcje agenta/workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandAction {
     /// Krótka nazwa akcji (wyświetlana jako label).
     pub label: &'static str,
-    /// Unicode symbol ikony (Nerd Font glyphy, bez fallbacku — szerokość = 1 col).
+    /// Unicode symbol ikony (Nerd Font glyphy, szerokość = 1 col).
     pub icon: char,
     /// Skrót klawiaturowy (wyświetlany po prawej stronie labelu).
     pub shortcut: &'static str,
-    /// Czy akcja jest już implementowana? `false` = placeholder (mutowana stylować).
+    /// Czy akcja jest już implementowana? `false` = placeholder.
     pub ready: bool,
 }
 
 /// Lista akcji w Command Barze — uporządkowana od najważniejszej.
-/// Każdy slot ma: ikonka + label + skrót. `ready=false` = przyszła akcja.
-pub const COMMAND_ACTIONS: [CommandAction; 6] = [
+pub const COMMAND_ACTIONS: [CommandAction; 4] = [
     CommandAction {
-        label: "modules",
-        icon: '\u{e74d}',
+        label: "install",
+        icon: '\u{f019}',
+        shortcut: "i",
+        ready: false,
+    },
+    CommandAction {
+        label: "onboarding",
+        icon: '\u{f1ae}',
+        shortcut: "o",
+        ready: false,
+    },
+    CommandAction {
+        label: "main",
+        icon: '\u{f0db}',
         shortcut: "m",
-        ready: false,
-    },
-    CommandAction {
-        label: "agents",
-        icon: '\u{f0c1}',
-        shortcut: "a",
-        ready: false,
-    },
-    CommandAction {
-        label: "registry",
-        icon: '\u{f0c9}',
-        shortcut: "r",
-        ready: false,
-    },
-    CommandAction {
-        label: "services",
-        icon: '\u{f013}',
-        shortcut: "s",
-        ready: false,
-    },
-    CommandAction {
-        label: "logs",
-        icon: '\u{f0f7}',
-        shortcut: "l",
         ready: false,
     },
     CommandAction {
@@ -316,13 +124,23 @@ pub const COMMAND_ACTIONS: [CommandAction; 6] = [
 pub const COMMAND_COUNT: usize = COMMAND_ACTIONS.len();
 
 /// Nazwy slotów — zachowane dla kompatybilności z istniejącymi testami/kodem.
-pub const COMMANDS: [&str; COMMAND_COUNT] = [
-    "modules", "agents", "registry", "services", "logs", "config",
-];
+pub const COMMANDS: [&str; COMMAND_COUNT] = ["install", "onboarding", "main", "config"];
 
+/// Pozycje nawigacji Sidebar — wyłącznie: Addons, Settings, Help, Exit.
+pub const SIDEBAR_ITEMS: [&str; 4] = ["Addons", "Settings", "Help", "Exit"];
+
+/// Liczba pozycji sidebaru.
+pub const SIDEBAR_COUNT: usize = SIDEBAR_ITEMS.len();
+
+/// Indeks domyślnej aktywnej pozycji w sidebarze (Addons).
+pub const DEFAULT_SIDE_ACTIVE: usize = 0;
+
+/// Główny podział paneli TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
+    /// Sidebar / nawigacja (lewy panel).
     Side,
+    /// Main / dashboard (prawy panel treści).
     Main,
 }
 
@@ -361,23 +179,44 @@ impl Area {
     }
 }
 
-/// Struktura nawigacji sidebaru Xerv. Jedno źródło danych dla pozycji.
-pub const SIDEBAR_ITEMS: [&str; 8] = [
-    "Dashboard",
-    "Agents",
-    "Projects",
-    "Services",
-    "Packages",
-    "Plugins",
-    "Settings",
-    "Help",
-];
+/// Model stanu aplikacji TUI — Xerv Core UI.
+#[derive(Debug)]
+pub struct App {
+    pub core: XervCore,
+    /// Aktywny panel Core UI (Install → Onboarding → Main).
+    pub core_panel: CorePanel,
+    /// Aktywna pozycja w bocznym panelu / nawigacji.
+    pub side_active: usize,
+    /// Kursor nawigacji (↑↓), wyróżniony białym kolorem gdy focus = Side.
+    pub side_cursor: usize,
+    /// Indeks pozycji na którą wskazuje mysz (magenta hover). None = brak.
+    pub side_hover: Option<usize>,
+    /// Indeks hoverowanego slocie command baru (magenta, nie zmienia selected).
+    pub hovered_command: Option<usize>,
+    /// Indeks aktualnie wybranego slocie command baru (cyan, keyboard focus).
+    pub selected_command: usize,
+    /// Nazwa hoverowanej karty dashboardu (magenta border). None = brak.
+    pub dashboard_hover: Option<&'static str>,
+    /// Czy aplikacja powinna wyjść.
+    pub should_quit: bool,
+    /// Focus między sidebar (Side) a panelem treści (Main).
+    pub active_panel: Panel,
+    /// Obszary kart (wypełniane przez ui::ui, czytane przez hit-testy).
+    pub card_areas: Vec<(&'static str, Area)>,
+    pub command_bar_area: Option<Area>,
+    pub side_area: Option<Area>,
+    pub main_area: Option<Area>,
+}
 
-/// Liczba pozycji sidebaru (wynikająca z SIDEBAR_ITEMS).
-pub const SIDEBAR_COUNT: usize = SIDEBAR_ITEMS.len();
-
-/// Indeks domyślnej aktywnej pozycji (Dashboard).
-pub const DEFAULT_SIDE_ACTIVE: usize = 0;
+/// Snapshot obszarów UI wypełniany przez `ui::ui` i konsumowany przez
+/// `App::on_render`.
+#[derive(Debug, Default)]
+pub struct UiAreas {
+    pub side: Option<Area>,
+    pub main: Option<Area>,
+    pub command_bar: Option<Area>,
+    pub cards: Vec<(&'static str, Area)>,
+}
 
 impl App {
     pub fn try_new(
@@ -387,20 +226,19 @@ impl App {
         let core = XervCore::new(config, state_path)?;
         Ok(Self {
             core,
-            active_panel: Panel::Side,
-            should_quit: false,
-            selected_command: 0,
+            core_panel: CorePanel::Install,
             side_active: DEFAULT_SIDE_ACTIVE,
             side_cursor: DEFAULT_SIDE_ACTIVE,
             side_hover: None,
             hovered_command: None,
+            selected_command: 0,
             dashboard_hover: None,
+            should_quit: false,
+            active_panel: Panel::Side,
             card_areas: Vec::new(),
             command_bar_area: None,
             side_area: None,
             main_area: None,
-            workspace: WorkspaceModel::demo(),
-            activity: ActivityEntry::demo_entries(),
         })
     }
 
@@ -413,12 +251,10 @@ impl App {
         self.main_area = areas.main;
     }
 
-    /// Oblicz indeks pozycji sidebaru na podstawie współrzędnych myszy.
+    /// Oblicza indeks pozycji sidebaru na podstawie współrzędnych myszy.
     /// Zwraca Some(idx) jeśli kliknięto w obszar pozycji, None jeśli poza.
     pub fn side_index_at(&self, col: u16, row: u16) -> Option<usize> {
         let rect = self.side_area?;
-        // Wewnętrzna przestrzeń sidebaru (za borderami):
-        // x+1, y+1, width-2, height-2.
         let inner_x = rect.x + 1;
         let inner_y = rect.y + 1;
         let inner_w = rect.w.saturating_sub(2);
@@ -429,7 +265,7 @@ impl App {
         if row < inner_y || row >= inner_y.saturating_add(inner_h) {
             return None;
         }
-        // Pierwszy wiersz wewnątrz to nagłówek " NAVIGATION" (1 linia).
+        // Pierwszy wiersz wewnątrz = nagłówek " NAVIGATION".
         let first_item_row = inner_y + 1;
         if row < first_item_row {
             return None;
@@ -442,9 +278,18 @@ impl App {
         }
     }
 
-    /// Obsługa kliknięcia — rozróżnia panel/command bar/sidebar po obszarach zapisanych w `on_render`.
+    /// Obsługa kliknięcia — rozróżnia command bar/sidebar/main po
+    /// obszarach zapisanych w `on_render`.
     pub fn on_click(&mut self, col: u16, row: u16) {
-        // Command bar
+        // Exit zawsze działa (klik lub Enter na Exit).
+        if let Some(idx) = self.side_index_at(col, row) {
+            if SIDEBAR_ITEMS[idx] == "Exit" {
+                self.should_quit = true;
+                return;
+            }
+        }
+
+        // Command bar.
         if let Some(rect) = self.command_bar_area {
             if rect.contains(col, row) {
                 if rect.w == 0 {
@@ -462,7 +307,7 @@ impl App {
                 return;
             }
         }
-        // Sidebar
+        // Sidebar.
         if let Some(_rect) = self.side_area {
             if let Some(idx) = self.side_index_at(col, row) {
                 self.side_active = idx;
@@ -472,12 +317,10 @@ impl App {
                 return;
             }
         }
-        // Main (dashboard cards, terminal, activity) — klik aktywuje panel,
-        // a hover rejestruje kartę na której kliknięto.
+        // Main (dashboard cards).
         if let Some(rect) = self.main_area {
             if rect.contains(col, row) {
                 self.active_panel = Panel::Main;
-                // Hit-test na karty dashboardu — klik == hover na tej karcie.
                 self.dashboard_hover = self
                     .card_areas
                     .iter()
@@ -490,30 +333,44 @@ impl App {
     /// Aktualizuje hover na podstawie pozycji myszy.
     /// Hover jest *czystym nakładnikiem wizualnym* — nie zmienia active/cursor.
     pub fn on_hover(&mut self, col: u16, row: u16) {
-        // Command bar — indeks slocie pod kursorem.
-        self.hovered_command = self
-            .command_bar_area
-            .filter(|rect| rect.contains(col, row))
+        // Exit — hover nie aktywuje, nie trzeba przerywać.
+        let _exit_hover = self
+            .side_area
             .and_then(|rect| {
-                if rect.w == 0 {
+                if !rect.contains(col, row) {
                     return None;
                 }
-                let slot_w = rect.w / COMMAND_COUNT as u16;
-                if slot_w == 0 {
-                    return None;
-                }
-                let rel = col.saturating_sub(rect.x) / slot_w;
-                let idx = (rel as usize).min(COMMAND_COUNT - 1);
-                Some(idx)
-            });
+                self.side_index_at(col, row)
+            })
+            .filter(|idx| SIDEBAR_ITEMS[*idx] == "Exit");
 
-        // Sidebar — hover nad pozycją (magenta), nie zmienia aktywnej.
-        self.side_hover = self.side_area.and_then(|rect| {
-            let _ = rect; // rect używany w side_index_at
-            self.side_index_at(col, row)
+        // Command bar.
+        self.hovered_command = self.command_bar_area.and_then(|rect| {
+            if !rect.contains(col, row) || rect.w == 0 {
+                return None;
+            }
+            let slot_w = rect.w / COMMAND_COUNT as u16;
+            if slot_w == 0 {
+                return None;
+            }
+            let rel = col.saturating_sub(rect.x) / slot_w;
+            let idx = (rel as usize).min(COMMAND_COUNT - 1);
+            Some(idx)
         });
 
-        // Dashboard cards — nazwa karty pod kursorem.
+        // Sidebar — hover, nie zmienia aktywnej.
+        self.side_hover = self.side_area.and_then(|rect| {
+            if rect.contains(col, row) {
+                self.side_index_at(col, row)
+            } else {
+                None
+            }
+        });
+        // Upewnijmy się, że Exit hover nie zostaje przekształcony w side_hover=Some.
+        // Exit jest pozycją sidebaru — hover na Exit rejestrujemy jako side_hover,
+        // ale nie jako aktywacja (to robi on_click).
+
+        // Dashboard cards.
         self.dashboard_hover = self
             .card_areas
             .iter()
@@ -542,8 +399,12 @@ impl App {
                 self.active_panel = Panel::Main;
             }
             Event::SelectCommand => {
-                // Akcja jeszcze nie zaimplementowana (scope: brak nowych funkcji biznesowych).
-                // Na tym etapie SelectCommand tylko potwierdza fokus na Main.
+                // Przejście do panelu odpowiadającego komendzie (placeholder).
+                self.core_panel = match self.selected_command {
+                    0 => CorePanel::Install,
+                    1 => CorePanel::Onboarding,
+                    _ => CorePanel::Main,
+                };
                 self.active_panel = Panel::Main;
             }
             Event::NavDown => {
@@ -567,23 +428,26 @@ impl App {
                 self.active_panel = Panel::Side;
             }
             Event::NavActivate => {
-                // Enter/Space potwierdza aktywną pozycję jako placeholder.
-                // Na tym etapie nie otwieramy żadnych ekranów — tylko akceptacja.
-                self.side_active = self.side_cursor;
-                self.active_panel = Panel::Side;
+                match self.active_panel {
+                    Panel::Side => {
+                        let idx = self.side_cursor;
+                        let name = SIDEBAR_ITEMS[idx.min(SIDEBAR_ITEMS.len() - 1)];
+                        match name {
+                            "Exit" => self.should_quit = true,
+                            _ => {
+                                self.side_active = idx;
+                            }
+                        }
+                    }
+                    Panel::Main => {
+                        // Enter w Main: przejdź do następnego CorePanela
+                        // (Install → Onboarding → Main), jeśli to nie Main.
+                        self.core_panel = self.core_panel.next();
+                    }
+                }
             }
-            Event::ClickPanel(col, row) => self.on_click(col, row),
-            Event::ClickCommand(col, row) => self.on_click(col, row),
+            Event::Click(col, row) => self.on_click(col, row),
             Event::Hover(col, row) => self.on_hover(col, row),
         }
     }
-}
-
-/// Snapshot obszarów UI wypełniany przez `ui::ui` i konsumowany przez `App::on_render`.
-#[derive(Debug, Default)]
-pub struct UiAreas {
-    pub side: Option<Area>,
-    pub main: Option<Area>,
-    pub command_bar: Option<Area>,
-    pub cards: Vec<(&'static str, Area)>,
 }
