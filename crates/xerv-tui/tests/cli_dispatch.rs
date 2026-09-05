@@ -1,13 +1,13 @@
-//! Testy dispatchu CLI (main.rs) — help/-h/--help oraz unknown command.
+//! Tests for CLI dispatch (main.rs) — help/-h/--help and unknown command.
 //!
-//! Builduje bin `xerv` i uruchamia go z różnymi arg w podprocesie.
-//! Nie testuje TUI (brak args), ani install/uninstall/update (wymagają network/filesystem).
+//! Builds the `xerv` binary and runs it with different args in a subprocess.
+//! Does not test TUI (no args), nor install/uninstall/update (require network/filesystem).
 
 use std::process::Command;
 
 fn xerv_binary() -> String {
-    // Kompilacja release nie jest wymagana — debug jest dostateczny.
-    // `CARGO_BIN_EXE_xerv` jest dostępny w integration tests.
+    // Release build not required — debug is sufficient.
+    // `CARGO_BIN_EXE_xerv` is available in integration tests.
     env!("CARGO_BIN_EXE_xerv").to_string()
 }
 
@@ -65,7 +65,7 @@ fn xerv_help_h_and_long_help_produce_same_output() {
     let bin = xerv_binary();
     let run = |arg: &str| -> String {
         let out = Command::new(&bin).arg(arg).output().expect("failed to run");
-        // print_usage używa eprintln — output w stderr.
+        // print_usage uses eprintln — output is in stderr.
         String::from_utf8_lossy(&out.stderr).to_string()
     };
     let h = run("-h");

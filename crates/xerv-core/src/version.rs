@@ -1,6 +1,6 @@
 use semver::Version;
 
-/// Wersja API Rdzenia. Niestabilna do `1.0.0`.
+/// Core API version. Unstable until `1.0.0`.
 pub const API_VERSION: Version = Version {
     major: 0,
     minor: 1,

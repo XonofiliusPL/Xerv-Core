@@ -69,8 +69,8 @@ fn main() -> io::Result<()> {
         }
     };
 
-    // Auto-check update w tle — nie blokuje TUI.
-    // Sprawdza GitHub Releases na starcie; wynik ustawia `app.update_available`.
+    // Auto-check update in background — does not block TUI.
+    // Checks GitHub Releases on startup; result sets `app.update_available`.
     let update_thread = std::thread::spawn(move || -> Option<String> {
         use xerv_core::api::api_version;
         let mut res = None;
@@ -117,7 +117,7 @@ where
 {
     let mut update_checked = false;
     loop {
-        // Sprawdzamy raz w tle czy wątek update się skończył.
+        // Check once in background whether the update thread finished.
         if !update_checked
             && update_thread
                 .as_ref()

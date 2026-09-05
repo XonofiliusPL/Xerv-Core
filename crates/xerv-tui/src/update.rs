@@ -1,15 +1,15 @@
-//! Update System — niezależny od TUI.
+//! Update System — independent of TUI.
 //!
-//! Odpowiada za:
-//! - wykrywanie najnowszego GitHub Release (`check_for_update`),
-//! - pobieranie i bezpieczną instalację (`download_and_install`),
-//! - porównywanie wersji SemVer (`cmp_versions`),
-//! - wybór artifactu (`select_asset`),
-//! - weryfikację SHA256 (`verify_sha256`).
+//! Responsible for:
+//! - detecting the latest GitHub Release (`check_for_update`),
+//! - downloading and safely installing (`download_and_install`),
+//! - comparing SemVer versions (`cmp_versions`),
+//! - selecting an asset (`select_asset`),
+//! - verifying SHA256 (`verify_sha256`).
 //!
-//! Logika porównań i wyboru używa surowych danych (czyste funkcje) —
-//! testowalna bez HTTP. `check_for_update` i `download_and_install`
-//! używają `reqwest` (blocking) — izolowane właśnie jako jedyne miejsca sieci.
+//! Comparison and selection logic uses raw data (pure functions) —
+//! testable without HTTP. `check_for_update` and `download_and_install`
+//! use `reqwest` (blocking) — isolated as the only network places.
 
 use std::fs;
 use std::io::Write;
@@ -19,10 +19,10 @@ use std::process::Command;
 use serde::Deserialize;
 use xerv_core::api::{ApiError, ApiResult, Version};
 
-/// Repozytorium GitHub (owner/repo).
+/// GitHub repository (owner/repo).
 const GITHUB_API: &str = "https://api.github.com/repos/";
 
-/// Reprezentuje jednego assetu w GitHub Release.
+/// Represents an asset in a GitHub Release.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Asset {
     pub name: String,
@@ -31,7 +31,7 @@ pub struct Asset {
     pub size: u64,
 }
 
-/// GitHub Release (minimalny payload).
+/// GitHub Release (minimal payload).
 #[derive(Debug, Deserialize, Clone)]
 pub struct GitHubRelease {
     pub tag_name: String,
@@ -43,7 +43,7 @@ pub struct GitHubRelease {
     pub assets: Vec<Asset>,
 }
 
-/// Wyciągnięta informacja o dostępności updat'u.
+/// Extracted update availability info.
 #[derive(Debug, Clone)]
 pub struct ReleaseInfo {
     pub version: Version,
@@ -52,7 +52,7 @@ pub struct ReleaseInfo {
     pub sha256_url: String,
 }
 
-/// Wynik porównania wersji.
+/// Version comparison result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpResult {
     Newer,
@@ -60,7 +60,7 @@ pub enum CmpResult {
     Older,
 }
 
-/// Porównuje bieżącą wersję z najnowszą.
+/// Compare the current version to the latest.
 pub fn cmp_versions(current: &Version, latest: &Version) -> CmpResult {
     if latest > current {
         CmpResult::Newer
@@ -71,13 +71,13 @@ pub fn cmp_versions(current: &Version, latest: &Version) -> CmpResult {
     }
 }
 
-/// Parsuje tag GitHub release na SemVer. Obsługuje prefiks `v`.
+/// Parse a GitHub release tag into SemVer. Handles `v` prefix.
 pub fn parse_tag(tag: &str) -> ApiResult<Version> {
     let t = tag.strip_prefix('v').unwrap_or(tag);
     Version::parse(t).map_err(|e| ApiError::Other(format!("invalid semver tag '{tag}': {e}")))
 }
 
-/// Wybiera asset dla targetu (np. `x86_64-unknown-linux-gnu`).
+/// Select asset for target (e.g., `x86_64-unknown-linux-gnu`).
 pub fn select_asset<'a>(release: &'a GitHubRelease, target: &str) -> ApiResult<Option<&'a Asset>> {
     for a in &release.assets {
         let lname = a.name.to_lowercase();
@@ -94,7 +94,7 @@ pub fn select_asset<'a>(release: &'a GitHubRelease, target: &str) -> ApiResult<O
     Ok(None)
 }
 
-/// Generuje URL SHA256 — konwencja: `<asset>.sha256`.
+/// Generate SHA256 URL — convention: `<asset>.sha256`.
 pub fn sha_url_for(asset_url: &str) -> String {
     format!("{asset_url}.sha256")
 }
@@ -113,8 +113,8 @@ pub fn detect_target() -> String {
     .to_string()
 }
 
-/// Fetch release info z GitHub API (latest).
-/// `Ok(None)` = brak nowszej wersji; `Ok(Some)` = dostępny update.
+/// Fetch release info from GitHub API (latest).
+/// `Ok(None)` = no newer version; `Ok(Some)` = update available.
 pub fn check_for_update(current: &Version) -> ApiResult<Option<ReleaseInfo>> {
     let target = detect_target();
     let url = format!("{GITHUB_API}XonofiliusPL/Xerv-Core/releases/latest");
@@ -145,8 +145,8 @@ pub fn check_for_update(current: &Version) -> ApiResult<Option<ReleaseInfo>> {
     }
 }
 
-/// Bezpieczna instalacja: pobierz → weryfikuj SHA → zastąp binarkę.
-/// Stara binarka → backup, rollback na błąd.
+/// Safe install: download → verify SHA → replace binary.
+/// Old binary → backup, rollback on error.
 pub fn download_and_install(rel: &ReleaseInfo, bin_path: &Path) -> ApiResult<()> {
     let parent = bin_path.parent().unwrap_or(Path::new("."));
     let backup = parent.join(format!(
@@ -255,14 +255,14 @@ pub fn download_and_install(rel: &ReleaseInfo, bin_path: &Path) -> ApiResult<()>
     Ok(())
 }
 
-/// Weryfikuje SHA256. `ok` = match.
+/// Verify SHA256. `ok` = match.
 fn verify_sha256(path: &Path, expected: &str) -> ApiResult<bool> {
     let content = fs::read(path).map_err(|e| ApiError::Other(format!("read: {e}")))?;
     let actual = sha256_bytes(&content);
     Ok(actual.eq_ignore_ascii_case(expected))
 }
 
-/// SHA256 — używa `sha2` crate (dependency).
+/// SHA256 — uses `sha2` crate (dependency).
 fn sha256_bytes(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn cmp_versions_current_release_beats_prerelease() {
-        // 0.2.0 > 0.2.0-alpha → brak update
+        // 0.2.0 > 0.2.0-alpha → no update
         assert!(!matches!(
             cmp_versions(&v("0.2.0"), &v("0.2.0-alpha")),
             CmpResult::Newer
@@ -417,7 +417,7 @@ mod tests {
         f.write_all(b"abc").unwrap();
         assert!(!verify_sha256(
             &p,
-            "0000000000000000000000000000000000000000000000000000000000000000"
+            "0000000000000000000000000000000000000000000000000000000000000"
         )
         .unwrap());
         let _ = std::fs::remove_dir_all(&dir);

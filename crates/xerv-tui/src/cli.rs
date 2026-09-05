@@ -1,13 +1,13 @@
-//! CLI mode dla `xerv` — tryby uruchamiania poza TUI.
+//! CLI mode for `xerv` — modes running outside TUI.
 //!
-//! - `xerv` (brak arg)         → Core TUI
-//! - `xerv install`            → interaktywny installer (user-space)
-//! - `xerv uninstall`          → usuwa binarkę + symlink + data/config
-//! - `xerv update`             → aktualizuje Xerv do najnowszego release
-//! - `xerv --version` / `xerv version` → wersja
+//! - `xerv` (no args)       → Core TUI
+//! - `xerv install`          → interactive installer (user-space)
+//! - `xerv uninstall`        → removes binary + symlink + data/config
+//! - `xerv update`           → updates Xerv to latest release
+//! - `xerv --version` / `xerv version` → version
 //!
-//! Brak zewnętrznych zależności — używamy `std::io::stdin` dla promptów.
-//! Ten moduł jest wywoływany z `main.rs` jako side-effect (print + exit).
+//! No external dependencies — we use `std::io::stdin` for prompts.
+//! This module is called from `main.rs` as a side-effect (print + exit).
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -15,19 +15,19 @@ use std::path::{Path, PathBuf};
 use xerv_core::api::Error as ApiError;
 use xerv_core::api::{ApiResult, CoreConfig, API_VERSION};
 
-/// Domyślna lokalizacja binarki (zgodna z projektowanym layoutem).
+/// Default binary location (matching planned layout).
 pub const DEFAULT_BIN_DIR: &str = ".local/share/xerv/bin";
 pub const DEFAULT_SYMLINK: &str = ".local/bin/xerv";
 pub const DEFAULT_CONFIG_DIR: &str = ".config/xerv";
 
-/// Rozwiązuje HOME (bez `dirs` crate — czytamy `$HOME`).
+/// Resolve HOME (without `dirs` crate — read `$HOME`).
 fn home_dir() -> ApiResult<PathBuf> {
     std::env::var("HOME")
         .map(PathBuf::from)
         .map_err(|_| ApiError::Other("HOME not set".into()))
 }
 
-/// Czy istnieje aktywna instalacja (sprawdzamy symlink + binarka)?
+/// Check whether an active installation exists (symlink + binary).
 fn detect_installation(home: &Path) -> Option<PathBuf> {
     let symlink = home.join(DEFAULT_SYMLINK);
     let bin = home.join(DEFAULT_BIN_DIR).join("xerv");
@@ -38,7 +38,7 @@ fn detect_installation(home: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Interaktywne pytanie Tak/Nie — czysty `stdin`, domyślnie `Yes`.
+/// Interactive Yes/No prompt — plain `stdin`, default `Yes`.
 fn prompt_yes(message: &str) -> bool {
     let mut input = String::new();
     eprintln!("{message} [Y/n] ");
@@ -52,11 +52,11 @@ fn prompt_yes(message: &str) -> bool {
 
 /// `xerv --version`
 pub fn version() {
-    println!("xerv {}", API_VERSION);
+    println!("xerv {API_VERSION}");
 }
 
-/// `xerv update` — pobiera i instaluje najnowszy release.
-/// Używa tego samego mechanizmu co UpdateConfirm w TUI.
+/// `xerv update` — fetch and install the latest release.
+/// Uses the same mechanism as UpdateConfirm in TUI.
 pub fn run_update() -> ApiResult<()> {
     eprintln!("=== xerv update ===");
     let home = home_dir()?;
@@ -72,7 +72,7 @@ pub fn run_update() -> ApiResult<()> {
         }
     };
 
-    eprintln!("Current: {}", current);
+    eprintln!("Current: {current}");
     eprintln!("Latest:  {}", rel.version);
     if rel.is_prerelease {
         eprintln!("WARNING: this is a pre-release version.");
@@ -88,7 +88,7 @@ pub fn run_update() -> ApiResult<()> {
     Ok(())
 }
 
-/// `xerv install` — interaktywny installer (user-space, brak sudo).
+/// `xerv install` — interactive installer (user-space, no sudo).
 pub fn run_install() -> ApiResult<()> {
     let home = home_dir()?;
     let bin = home.join(DEFAULT_BIN_DIR).join("xerv");
@@ -115,7 +115,9 @@ pub fn run_install() -> ApiResult<()> {
     if !bin.exists() {
         eprintln!("ERROR: binary not found at {}", bin.display());
         eprintln!("Hint: run the install script from GitHub releases first:");
-        eprintln!("  curl -fsSL https://github.com/XonofiliusPL/Xerv-Core/releases/latest/download/xerv-install.sh | bash");
+        eprintln!(
+            "  curl -fsSL https://github.com/XonofiliusPL/Xerv-Core/releases/latest/download/xerv-install.sh | bash"
+        );
         return Err(ApiError::Other("binary missing".into()));
     }
     #[cfg(unix)]
@@ -157,7 +159,7 @@ pub fn run_install() -> ApiResult<()> {
     Ok(())
 }
 
-/// `xerv uninstall` — usuwa binarkę + symlink + data + opcjonalnie config.
+/// `xerv uninstall` — removes binary + symlink + data + optionally config.
 pub fn run_uninstall() -> ApiResult<()> {
     let home = home_dir()?;
     let bin = home.join(DEFAULT_BIN_DIR).join("xerv");

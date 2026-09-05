@@ -1,7 +1,8 @@
-use xerv_core::{CoreConfig, XervCore};
+use xerv_core::api::CoreConfig;
+use xerv_core::api::XervCore;
 
 #[test]
-fn xerv_core_implements_debug() {
+fn debug_impl_contains_xervcore() {
     let dir = tempfile::tempdir().unwrap();
     let cfg = CoreConfig {
         data_dir: dir.path().to_path_buf(),

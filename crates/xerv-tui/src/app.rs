@@ -2,34 +2,34 @@ use xerv_core::api::XervCore;
 
 use crate::event::Event;
 
-/// Główne ekrany Xerv Core UI — model ekranowy (screen-based).
+/// Main Xerv Core UI screens — screen-based model.
 ///
-/// Jeden główny ekran jest aktywny w danej chwili; nawigacja przełącza
-/// `current_screen`. `nav_stack` zapamiętuje historię (BackSpace = pop).
+/// One main screen is active at any moment; navigation switches
+/// `current_screen`. `nav_stack` remembers history (BackSpace = pop).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
-    /// Główny ekran — lista nawigacji: Settings, Help, Update, Quit.
+    /// Main screen — navigation list: Settings, Help, Update, Quit.
     Main,
-    /// Ekran pomocy (pełny ekran).
+    /// Help screen (full screen).
     Help,
-    /// Ekran ustawień (placeholder — pełny ekran, pusty).
+    /// Settings screen (placeholder — full screen, empty).
     Settings,
-    /// Ekran potwierdzenia aktualizacji (pełny ekran).
+    /// Update confirmation screen (full screen).
     UpdateConfirm,
 }
 
-/// Pozycja w głównej liście nawigacji (Screen::Main).
-/// `Update` jest dynamiczny — tylko gdy dostępna aktualizacja.
+/// Position in the main navigation list (Screen::Main).
+/// `Update` is dynamic — only when an update is available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NavItem {
     Settings,
     Help,
-    /// Update Xerv — widoczny tylko gdy `App::update_available == Some`.
+    /// Update Xerv — visible only when `App::update_available == Some`.
     Update,
     Quit,
 }
 
-/// Etykieta + skrót dla pozycji nawigacji.
+/// Label + shortcut for a navigation entry.
 #[derive(Debug, Clone, Copy)]
 pub struct NavEntry {
     pub label: &'static str,
@@ -55,7 +55,7 @@ impl NavItem {
     }
 }
 
-/// Prostokąt w układzie współrzędnych terminala (kolumna/wiersz).
+/// Rectangle in terminal coordinates (column/row).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rect {
     pub x: u16,
@@ -73,26 +73,27 @@ impl Rect {
     }
 }
 
-/// Model stanu aplikacji Xerv Core UI.
+/// Application state model for Xerv Core UI.
 #[derive(Debug)]
 pub struct App {
-    /// Instancja Rdzenia (do shutdown przy Quit).
+    /// Core instance (for shutdown on Quit).
     pub core: XervCore,
-    /// Aktywny ekran.
+    /// Active screen.
     pub current_screen: Screen,
-    /// Stos ekranów (do BackSpace — Return do poprzedniego widoku).
+    /// Screen stack (BackSpace = Return to previous view).
     pub nav_stack: Vec<Screen>,
-    /// Indeks aktualnie podświetlonej pozycji w Screen::Main.
+    /// Index of currently highlighted position in Screen::Main.
     pub nav_cursor: usize,
-    /// Indeks hoverowanej myszą pozycji w Screen::Main (magenta, nie zmienia cursor).
+    /// Index of mouse-hover position in Screen::Main (magenta, does not
+    /// change cursor).
     pub nav_hover: Option<usize>,
-    /// Czy aplikacja powinna wyjść.
+    /// Whether the application should quit.
     pub should_quit: bool,
-    /// Obszar listy nawigacji (dla hit-testów mysą).
+    /// Navigation list area (for mouse hit-tests).
     pub nav_area: Option<Rect>,
-    /// Najnowsza dostępna wersja jako string (Some = update dostępny).
+    /// Latest available version as string (Some = update available).
     pub update_available: Option<String>,
-    /// Czy aktualizacja w toku.
+    /// Whether an update is in progress.
     pub update_in_progress: bool,
 }
 
@@ -115,8 +116,8 @@ impl App {
         })
     }
 
-    /// Dynamiczna lista nawigacji (Settings, Help, Update, Quit).
-    /// `Update` jest widoczny tylko gdy `update_available == Some`.
+    /// Dynamic navigation list (Settings, Help, Update, Quit).
+    /// `Update` is visible only when `update_available == Some`.
     pub fn entries(&self) -> Vec<NavItem> {
         let mut items = vec![NavItem::Settings, NavItem::Help];
         if self.update_available.is_some() {
@@ -126,7 +127,7 @@ impl App {
         items
     }
 
-    /// Obsługa zdarzenia głównego loopu.
+    /// Handle an application event.
     pub fn handle_event(&mut self, ev: Event) {
         match ev {
             Event::Quit => self.should_quit = true,
@@ -148,13 +149,13 @@ impl App {
             Event::NavRight => self.move_cursor(1),
             Event::Confirm => self.activate_current(),
             Event::Return => self.go_back(),
-            // Y — potwierdź update na UpdateConfirm screen.
+            // Y — confirm update on UpdateConfirm screen.
             Event::ConfirmUpdate => {
                 if self.current_screen == Screen::UpdateConfirm && self.update_available.is_some() {
                     self.update_in_progress = true;
                 }
             }
-            // N — anuluj update na UpdateConfirm screen.
+            // N — cancel update on UpdateConfirm screen.
             Event::CancelUpdate => {
                 if self.current_screen == Screen::UpdateConfirm {
                     self.go_back();
@@ -166,7 +167,7 @@ impl App {
         }
     }
 
-    /// Przesunięcie kursora o `delta` (z wrap, tylko na Main).
+    /// Move cursor by `delta` (with wrap, on Main only).
     fn move_cursor(&mut self, delta: i32) {
         if self.current_screen != Screen::Main {
             return;
@@ -176,7 +177,7 @@ impl App {
         self.nav_cursor = ((signed % count as i32).rem_euclid(count as i32)) as usize;
     }
 
-    /// Aktywacja aktualnie podświetlonej pozycji (Enter).
+    /// Activate the currently highlighted item (Enter).
     fn activate_current(&mut self) {
         if self.current_screen != Screen::Main {
             return;
@@ -202,14 +203,14 @@ impl App {
         }
     }
 
-    /// Powrót do poprzedniego widoku (BackSpace). Na główce stosu nic nie robi.
+    /// Return to previous view (BackSpace). No-op on empty stack.
     fn go_back(&mut self) {
         if let Some(prev) = self.nav_stack.pop() {
             self.current_screen = prev;
         }
     }
 
-    /// Mouse hover — czysty nakładnik (magenta), nie zmienia cursor/active.
+    /// Mouse hover — pure overlay (magenta), does not change cursor/active.
     pub fn on_hover(&mut self, col: u16, row: u16) {
         self.nav_hover = self.nav_area.and_then(|rect| {
             if !rect.contains(col, row) || rect.h == 0 {
@@ -225,7 +226,7 @@ impl App {
         });
     }
 
-    /// Mouse click — aktywuje pozycję.
+    /// Mouse click — activates position.
     pub fn on_click(&mut self, col: u16, row: u16) {
         if let Some(rect) = self.nav_area {
             if rect.contains(col, row) && rect.h > 0 {
@@ -239,7 +240,7 @@ impl App {
         }
     }
 
-    /// Aktualizacja geometrii po renderze.
+    /// Update geometry after render.
     pub fn on_render(&mut self, nav_area: Option<Rect>) {
         self.nav_area = nav_area;
     }

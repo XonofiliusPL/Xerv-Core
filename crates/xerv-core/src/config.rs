@@ -23,7 +23,8 @@ impl Default for CoreConfig {
 }
 
 impl CoreConfig {
-    /// Ładuje konfigurację z `path`. Gdy `path` jest `None` lub plik nie istnieje, zwraca `Default`.
+    /// Loads configuration from `path`. When `path` is `None` or the file
+    /// does not exist, returns `Default`.
     pub fn load(path: Option<&Path>) -> Result<Self> {
         let Some(p) = path else {
             return Ok(Self::default());

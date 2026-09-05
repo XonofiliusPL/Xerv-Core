@@ -1,25 +1,17 @@
-use xerv_core::{CoreConfig, XervCore};
-
-fn core(dir: &std::path::Path) -> XervCore {
-    let cfg = CoreConfig {
-        data_dir: dir.to_path_buf(),
-        log_level: "warn".into(),
-        state_filename: "s.json".into(),
-    };
-    XervCore::new(cfg, dir.join("s.json")).unwrap()
-}
+use xerv_core::api::CoreConfig;
+use xerv_core::api::XervCore;
 
 #[test]
 fn fresh_core_is_not_shut_down() {
     let dir = tempfile::tempdir().unwrap();
-    let c = core(dir.path());
+    let c = XervCore::new(CoreConfig::default(), dir.path().join("state.json")).unwrap();
     assert!(!c.is_shutdown());
 }
 
 #[test]
 fn after_shutdown_is_shut_down() {
     let dir = tempfile::tempdir().unwrap();
-    let c = core(dir.path());
+    let c = XervCore::new(CoreConfig::default(), dir.path().join("state.json")).unwrap();
     c.shutdown().unwrap();
     assert!(c.is_shutdown());
 }
@@ -27,8 +19,8 @@ fn after_shutdown_is_shut_down() {
 #[test]
 fn double_shutdown_still_shut_down() {
     let dir = tempfile::tempdir().unwrap();
-    let c = core(dir.path());
+    let c = XervCore::new(CoreConfig::default(), dir.path().join("state.json")).unwrap();
     c.shutdown().unwrap();
-    let _ = c.shutdown(); // błąd, ale flaga zostaje
+    let _ = c.shutdown();
     assert!(c.is_shutdown());
 }

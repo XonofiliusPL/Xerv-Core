@@ -1,4 +1,5 @@
-use xerv_core::{CoreConfig, XervCore};
+use xerv_core::api::CoreConfig;
+use xerv_core::api::XervCore;
 
 #[test]
 fn new_then_shutdown_writes_state_file() {

@@ -2,44 +2,45 @@ use crossterm::event::{
     self as ct_event, Event as CtEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent,
 };
 
-/// Zdarzenia akcyjne (wejścia) obsługiwane przez aplikację.
+/// Action events (inputs) handled by the application.
 ///
-/// Każdy wariant mapuje się 1:1 na akcję `App::handle_event`. Zdarzenia
-/// myszy (`Hover`/`Click`) tworzone są w `From<MouseEvent>`.
+/// Each variant maps 1:1 to an `App::handle_event` action. Mouse events
+/// (`Hover`/`Click`) are created in `From<MouseEvent>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
-    /// q / Esc — zawsze kończy aplikację.
+    /// q / Esc — always quits the application.
     Quit,
-    /// Strzałki w dół / prawo (w Screen::Main) — przesuwa cursor.
+    /// Down / Right arrows (on Screen::Main) — move cursor.
     NavDown,
-    /// Strzałki w górę / lewo (w Screen::Main) — przesuwa cursor.
+    /// Up / Left arrows (on Screen::Main) — move cursor.
     NavUp,
-    /// Lef/Right aliases.
+    /// Left/Right aliases.
     NavLeft,
     NavRight,
-    /// Enter / Space — potwierdza aktualną pozycję (OpenScreen/Activate).
+    /// Enter / Space — confirm current position (OpenScreen/Activate).
     Confirm,
-    /// Y — potwierdza update na UpdateConfirm screen.
+    /// Y — confirm update on UpdateConfirm screen.
     ConfirmUpdate,
-    /// N — anuluje update na UpdateConfirm screen.
+    /// N — cancel update on UpdateConfirm screen.
     CancelUpdate,
-    /// Backspace — powrót do poprzedniego widoku (Return).
+    /// Backspace — return to previous view (Return).
     Return,
-    /// h — otwiera Help (z dowolnego widoku).
+    /// h — open Help (from any view).
     OpenHelp,
-    /// u — otwiera Update screen (gdy dostępny, z Main).
+    /// u — open Update screen (when available, from Main).
     OpenUpdate,
-    /// Ruch myszy na (col, row) — czysty highlight (magenda), nie zmienia cursor.
+    /// Mouse movement at (col, row) — pure highlight (magenta),
+    /// does not change cursor.
     Hover(u16, u16),
-    /// Kliknięcie myszą na (col, row) — aktywacja pozycji.
+    /// Mouse click at (col, row) — activate position.
     Click(u16, u16),
     Tick,
 }
 
-/// Konwersja z `crossterm::event::MouseEvent` → `Event`.
+/// Conversion from `crossterm::event::MouseEvent` → `Event`.
 ///
-/// MouseMove → `Hover`, Left Click → `Click`, inne przyciski/ruchy → `Tick`
-/// (ignorowany — brak right-click/context menu).
+/// MouseMove → `Hover`, Left Click → `Click`, other buttons/moves → `Tick`
+/// (ignored — no right-click/context menu).
 impl From<MouseEvent> for Event {
     fn from(m: MouseEvent) -> Self {
         let (col, row) = (m.column, m.row);
@@ -53,7 +54,7 @@ impl From<MouseEvent> for Event {
     }
 }
 
-/// Czyta następny event wejściowy, ignoruje `KeyEventKind::Release`.
+/// Read the next input event, ignoring `KeyEventKind::Release`.
 pub fn read_event() -> std::io::Result<Event> {
     loop {
         let ev = ct_event::read()?;
@@ -65,18 +66,18 @@ pub fn read_event() -> std::io::Result<Event> {
             }) => {
                 return Ok(match code {
                     KeyCode::Char('q') | KeyCode::Esc => Event::Quit,
-                    // h — Help (globalny skrót).
+                    // h — Help (global shortcut).
                     KeyCode::Char('h') => Event::OpenHelp,
-                    // U — Update Xerv (gdy dostępny, z Main).
+                    // U — Update Xerv (when available, from Main).
                     KeyCode::Char('U') => Event::OpenUpdate,
                     KeyCode::Tab => Event::NavRight,
                     KeyCode::BackTab => Event::NavLeft,
                     KeyCode::Enter | KeyCode::Char(' ') => Event::Confirm,
-                    // y/n na UpdateConfirm screen.
+                    // y/n on UpdateConfirm screen.
                     KeyCode::Char('y') | KeyCode::Char('Y') => Event::ConfirmUpdate,
                     KeyCode::Char('n') | KeyCode::Char('N') => Event::CancelUpdate,
                     KeyCode::Backspace => Event::Return,
-                    // ↑/↓ oraz ←/→ — nawigacja w Screen::Main.
+                    // ↑/↓ as well as ←/→ — navigation on Screen::Main.
                     KeyCode::Down | KeyCode::Right => Event::NavDown,
                     KeyCode::Up | KeyCode::Left => Event::NavUp,
                     _ => continue,

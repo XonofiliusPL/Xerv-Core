@@ -1,4 +1,4 @@
-//! Testy modelu ekranów (Screen) i nawigigacji w App.
+//! Tests for the screen model (Screen) and navigation in App.
 use xerv_core::api::CoreConfig;
 use xerv_tui::app::{App, NavItem, Screen};
 use xerv_tui::event::Event;
@@ -55,7 +55,7 @@ fn entries_with_update_has_4_items_with_update_above_quit() {
     assert_eq!(entries[1], NavItem::Help);
     assert_eq!(entries[2], NavItem::Update);
     assert_eq!(entries[3], NavItem::Quit);
-    // Update musi być bezpośrednio nad Quit.
+    // Update must be directly above Quit.
     let update_pos = entries.iter().position(|&e| e == NavItem::Update).unwrap();
     let quit_pos = entries.iter().position(|&e| e == NavItem::Quit).unwrap();
     assert_eq!(quit_pos, update_pos + 1);

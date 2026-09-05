@@ -1,13 +1,13 @@
-//! Testy ekranów Core UI (Screen model) i interakcji myszy.
+//! Tests for Core UI screens (Screen model) and mouse interaction.
 //!
-//! Warstwa: ratatui `TestBackend` parsuje bufor renderu i weryfikuje
-//! — renderowanie Main/Help/Settings,
-//! — listę nawigacji (Settings, Help, Quit),
-//! — hit-test mysą (Event::Hover / Event::Click),
-//! — sekcje Help (skróty, info, GitHub link),
-//! — stopkę z hintem,
-//! — brak starych elementów Core UI (Sidebar, Command Bar, Install/Onboarding
-//!   jako osobne ekrany, Agent Workspace, itp.).
+//! Level: ratatui `TestBackend` parses render buffer and verifies
+//! — rendering Main/Help/Settings,
+//! — navigation list (Settings, Help, Quit),
+//! — mouse hit-tests (Event::Hover / Event::Click),
+//! — Help sections (shortcuts, info, GitHub link),
+//! — footer with hints,
+//! — absence of old Core UI elements (Sidebar, Command Bar, Install/Onboarding
+//!   as separate screens, Agent Workspace, etc.).
 
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -33,7 +33,7 @@ fn make_app() -> App {
     App::try_new(cfg, state_path).unwrap()
 }
 
-/// Renderuje i zwraca (bufor jako linie, on_render z geometrią).
+/// Render and return (buffer as lines, on_render with geometry).
 fn render(app: &mut App, width: u16, height: u16) -> Vec<String> {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -63,8 +63,8 @@ fn main_screen_lists_exactly_required_items() {
 
 #[test]
 fn sidebar_forbidden_items_not_present() {
-    // Nie ma już sidebar — sprawdzamy, że nagłówek listy nie istnieje
-    // i brak starych pozycji nawigacji.
+    // Sidebar is gone — check that header does not exist
+    // and old navigation items are absent.
     let mut app = make_app();
     let lines = render(&mut app, 100, 24);
     let joined = lines.join("\n");
@@ -147,7 +147,7 @@ fn help_screen_shows_about_section() {
     assert!(joined.contains("About"), "help should have About section");
 }
 
-// ---- footer hint ----------------------------------------------------------------
+// ---- footer hint -----------------------------------------------------------------
 
 #[test]
 fn footer_shows_exact_hint() {
@@ -160,7 +160,7 @@ fn footer_shows_exact_hint() {
         "footer should contain 'Confirm'"
     );
     assert!(joined.contains("Return"), "footer should contain 'Return'");
-    // Footer nie ma dodatkowych akcji/statusów.
+    // Footer has no additional actions/statuses.
     for forbidden in ["Settings", "Help", "Quit", "Exit", "READY", "SHUTDOWN"] {
         assert!(
             !lines.last().unwrap().contains(forbidden),
@@ -176,7 +176,7 @@ fn no_command_bar_in_core_ui() {
     let mut app = make_app();
     let lines = render(&mut app, 120, 24);
     let joined = lines.join("\n");
-    // Brak 4 slotów z ikonami Nerd Font (Command Bar).
+    // No 4 slots with Nerd Font icons (Command Bar).
     for icon in ["\u{f019}", "\u{f1ae}", "\u{f0db}", "\u{f009}"] {
         assert!(
             !joined.contains(icon),
@@ -190,7 +190,7 @@ fn no_core_dashboard_card_in_core_ui() {
     let mut app = make_app();
     let lines = render(&mut app, 120, 24);
     let joined = lines.join("\n");
-    // Brak kart diagnostycznych.
+    // No diagnostic cards.
     for forbidden in ["core", "XERV • api", "api 0.1.0", "schema v7", "uptime"] {
         assert!(
             !joined.contains(forbidden),
@@ -199,14 +199,14 @@ fn no_core_dashboard_card_in_core_ui() {
     }
 }
 
-// ---- mouse hover ----------------------------------------------------------------
+// ---- mouse hover -----------------------------------------------------------------
 
 #[test]
 fn mouse_hover_sets_nav_hover_without_changing_cursor() {
     let mut app = make_app();
     let _ = render(&mut app, 80, 24);
     let area = app.nav_area.expect("nav area");
-    // Hover na 2. pozycję (Help, idx 1).
+    // Hover on 2nd position (Help, idx 1).
     let col = area.x + 1;
     let row = area.y + 1;
     app.handle_event(Event::Hover(col, row));
@@ -223,19 +223,19 @@ fn mouse_hover_clears_outside_nav_area() {
     let row = area.y + 1;
     app.handle_event(Event::Hover(col, row));
     assert_eq!(app.nav_hover, Some(1));
-    // Poza obszarem listy.
+    // Outside list area.
     app.handle_event(Event::Hover(1, 1));
     assert_eq!(app.nav_hover, None);
 }
 
-// ---- mouse click ----------------------------------------------------------------
+// ---- mouse click -----------------------------------------------------------------
 
 #[test]
 fn mouse_click_activates_current_item() {
     let mut app = make_app();
     let _ = render(&mut app, 80, 24);
     let area = app.nav_area.expect("nav area");
-    // Klik w Quit (idx 2).
+    // Click on Quit (idx 2).
     let col = area.x + 1;
     let row = area.y + 2;
     app.handle_event(Event::Click(col, row));
@@ -265,6 +265,7 @@ fn mouse_click_outside_nav_area_does_nothing() {
 }
 
 // ---- update visibility ----------------------------------------------------------
+
 #[test]
 fn update_not_visible_when_no_update_available() {
     let mut app = make_app();
@@ -283,7 +284,7 @@ fn update_visible_above_quit_when_update_available() {
     let lines = render(&mut app, 80, 24);
     let joined = lines.join("\n");
     assert!(joined.contains("Update Xerv"), "Update must be visible");
-    // Quit musi być pod Update.
+    // Quit must be below Update.
     let update_idx = joined.find("Update Xerv").unwrap();
     let quit_idx = joined.rfind("Quit").unwrap_or(joined.len());
     assert!(

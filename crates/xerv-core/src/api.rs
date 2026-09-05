@@ -1,31 +1,31 @@
-//! Xerv Core — stabilne publiczne API.
+//! Xerv Core — the stable public API.
 //!
-//! Ten moduł jest **kontraktem** między Rdzeniem a przyszłymi warstwami
-//! (TUI, CLI, moduły, pluginy, adaptery). Gwarantujemy:
+//! This module is the **contract** between the Core and future layers
+//! (TUI, CLI, modules, plugins, adapters). We guarantee:
 //!
-//! - nazwy typów i funkcji wymienione w module (aliasy i reexporty);
-//! - semantykę metod udokumentowaną w `///` przy każdym typie;
-//! - że `Cargo.toml` nie zmienia się w sposób łamiący API bez bumpu
-//!   `API_VERSION` w [`crate::API_VERSION`].
+//! - type and function names listed in the module (aliases and re-exports);
+//! - method semantics documented via `///` on each type;
+//! - that `Cargo.toml` does not break the API without bumping
+//!   `API_VERSION` in [`crate::API_VERSION`].
 //!
-//! **Nie gwarantujemy** (są poza zakresem Punktu 2):
-//! - żadnych traitów rozszerzeń;
-//! - żadnego rejestru pluginów;
-//! - żadnych subskrypcji zdarzeń;
-//! - żadnego API specyficznego dla konsumenta (TUI/CLI/moduły).
+//! **We do not guarantee** (out of scope for Point 2):
+//! - any extension traits;
+//! - any plugin registry;
+//! - any event subscriptions;
+//! - any consumer-specific API (TUI/CLI/modules).
 
-/// Alias stabilnego [`crate::Error`].
+/// Alias for stable [`crate::Error`].
 pub type ApiError = crate::Error;
 
-/// Alias stabilnego [`crate::Result`].
+/// Alias for stable [`crate::Result`].
 pub type ApiResult<T> = crate::Result<T>;
 
-// Reexporty stabilnych typów Rdzenia.
+// Stable re-exports of Core types.
 pub use crate::config::CoreConfig;
 pub use crate::core::XervCore;
 pub use crate::error::{Error, Result};
 pub use crate::state::CoreState;
 pub use crate::version::{api_version, API_VERSION};
 
-// Reexport semver dla consumerów (TUI/CLI) — potrzebny do komparacji wersji.
+// Re-export semver for consumers (TUI/CLI) — needed for version comparison.
 pub use semver::Version;

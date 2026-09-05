@@ -1,3 +1,5 @@
+//! Xerv Core tests.
+
 use xerv_core::api;
 use xerv_core::api::CoreConfig;
 use xerv_tui::app::App;

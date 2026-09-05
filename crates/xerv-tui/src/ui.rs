@@ -9,8 +9,8 @@ use crate::app::App;
 const HEADER_HEIGHT: u16 = 1;
 const FOOTER_HEIGHT: u16 = 1;
 
-/// Minimalny Top Bar — wyłącznie brand + link do GitHub. Brak pól diagnostycznych
-/// (Core status / API / schema / uptime / data / state / log / boot).
+/// Minimal Top Bar — exclusively brand + GitHub link. No diagnostic
+/// fields (Core status / API / schema / uptime / data / state / log / boot).
 pub fn ui(f: &mut Frame, app: &mut App) {
     let area = f.area();
     let chunks = Layout::default()
@@ -29,37 +29,38 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
 // ---- design tokens (DESIGN.md) -------------------------------------------------
 //
-// Jedno miejsce prawdy dla identyfikacji kolorów — zmiana tutaj = zmiana w DESIGN.md.
+// Single source of truth for color identification — changing here = changing
+// in DESIGN.md.
 
-/// primary #00D7D7 (terminal Cyan) — akcent interaktywny / aktywny element.
+/// primary #00D7D7 (terminal Cyan) — interactive accent / active element.
 fn accent_primary() -> Style {
     Style::default().fg(Color::Cyan)
 }
 
-/// primary + BOLD — brand, aktywny napis.
+/// primary + BOLD — brand, active text.
 fn accent_primary_bold() -> Style {
     accent_primary().add_modifier(Modifier::BOLD)
 }
 
-/// secondary #D787D7 (terminal Magenta) — hover / wartości akcentu.
+/// secondary #D787D7 (terminal Magenta) — hover / accent values.
 fn accent_secondary() -> Style {
     Style::default().fg(Color::Magenta)
 }
 
-/// value #FFFFFF (terminal White) — wartości danych.
+/// value #FFFFFF (terminal White) — data values.
 fn value_style() -> Style {
     Style::default().fg(Color::White)
 }
 
-/// muted #585858 (terminal DarkGray) — etykiety, separatory, idle.
+/// muted #585858 (terminal DarkGray) — labels, separators, idle.
 fn muted_style() -> Style {
     Style::default().fg(Color::DarkGray)
 }
 
-const ITEM_MARKER_CURSOR: &str = "\u{258E} "; // ▎ : kursor (white) — wybrana opcja
-const ITEM_MARKER_HOVER: &str = "\u{25CB} "; // ○ : hover (magenta, nie zmienia cursor)
+const ITEM_MARKER_CURSOR: &str = "\u{258E} "; // ▎ : cursor (white) — selected option
+const ITEM_MARKER_HOVER: &str = "\u{25CB} "; // ○ : hover (magenta, does not change cursor)
 
-/// Header — wyłącznie brand i link do GitHub.
+/// Header — exclusively brand and GitHub link.
 fn draw_header(f: &mut Frame, area: Rect) {
     let line = Line::from(vec![
         Span::raw(" "),
@@ -73,10 +74,10 @@ fn draw_header(f: &mut Frame, area: Rect) {
     f.render_widget(Paragraph::new(line), area);
 }
 
-/// Footer — wyłącznie hint skrótów, nic więcej.
-/// Klawisze = accent_primary (cyan), opisy (Nav/Confirm/Return) = value
-/// (white) — zachowane odstępy i układ.
-/// `U Update` pojawia się tylko gdy update dostępny.
+/// Footer — exclusively shortcut hints, nothing else.
+/// Keys = accent_primary (cyan), descriptions (Nav/Confirm/Return) = value
+/// (white) — spacing and layout preserved.
+/// `U Update` appears only when update is available.
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let mut spans: Vec<Span<'static>> = vec![
         Span::raw(" "),
@@ -98,9 +99,9 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(Paragraph::new(line), area);
 }
 
-/// Renderuje treść głównego obszaru w zależności od aktualnego ekranu.
-/// Dla `Screen::Main` zapisuje `app.nav_area` (obszar listy nawigacji)
-/// — potrzebny do hit-testów mysą w `App::on_hover`/`on_click`.
+/// Render the main area content based on the current screen.
+/// For `Screen::Main` saves `app.nav_area` (navigation list area) —
+/// needed for mouse hit-tests in `App::on_hover`/`on_click`.
 fn draw_content(f: &mut Frame, area: Rect, app: &mut App) {
     match app.current_screen {
         crate::app::Screen::Main => draw_main(f, area, app),
@@ -110,11 +111,11 @@ fn draw_content(f: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
-/// Główny ekran — lista nawigacji. Każda pozycja to jeden wiersz;
-/// aktywna = cyan+bold (▎), hover = magenta (○).
+/// Main screen — navigation list. Each item is one row;
+/// active = cyan+bold (▎), hover = magenta (○).
 fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
-    // Obszar listy = wewnątrz ramki (border 1 z każdej strony).
-    // Lista zaczyna się od wiersza 0 w inner (pierwszy element = idx 0).
+    // List area = inside frame (border 1 on each side).
+    // List starts at row 0 in inner (first item = idx 0).
     app.nav_area = Some(crate::app::Rect {
         x: area.x + 1,
         y: area.y + 1,
@@ -154,7 +155,7 @@ fn draw_main(f: &mut Frame, area: Rect, app: &mut App) {
     f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-/// Ekran ustawień — placeholder (pusty), nie implementuje funkcjonalności.
+/// Settings screen — placeholder (empty), does not implement functionality.
 fn draw_settings(f: &mut Frame, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
@@ -169,7 +170,7 @@ fn draw_settings(f: &mut Frame, area: Rect) {
     );
 }
 
-/// Pełny ekran Help — skróty, info o Xerv, link do GitHub.
+/// Full-screen Help screen — shortcuts, info about Xerv, GitHub link.
 fn draw_help(f: &mut Frame, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
@@ -241,8 +242,8 @@ fn draw_help(f: &mut Frame, area: Rect) {
     );
 }
 
-/// Ekran potwierdzenia aktualizacji — pełny ekran.
-/// Pokazuje: aktualna wersja, dostępna wersja, przycisk Y/N.
+/// Update confirmation screen — full screen.
+/// Shows: current version, latest version, Y/N prompt.
 fn draw_update_confirm(f: &mut Frame, area: Rect, app: &mut App) {
     let block = Block::default()
         .borders(Borders::ALL)

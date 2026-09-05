@@ -7,9 +7,9 @@ use crate::config::CoreConfig;
 use crate::state::CoreState;
 use crate::{Error, Result};
 
-/// Główna instancja Rdzenia. Posiada konfigurację i stan, udostępnia `shutdown`.
+/// The main Core instance. Holds configuration and state, exposes `shutdown`.
 ///
-/// Lifecycle: `XervCore::new(...)` → użycie → `shutdown()`.
+/// Lifecycle: `XervCore::new(...)` → usage → `shutdown()`.
 #[derive(Debug)]
 pub struct XervCore {
     config: CoreConfig,
@@ -41,13 +41,13 @@ impl XervCore {
         crate::version::api_version()
     }
 
-    /// Zwraca `true` jeśli `shutdown()` został już wywołany.
+    /// Returns `true` if `shutdown()` has already been called.
     pub fn is_shutdown(&self) -> bool {
         *self.shutdown_flag.lock().unwrap()
     }
 
-    /// Zapisuje stan i blokuje instancję przed dalszym użyciem.
-    /// Drugie wywołanie zwraca `Error::Lifecycle`.
+    /// Saves state and locks the instance against further use.
+    /// A second call returns `Error::Lifecycle`.
     pub fn shutdown(&self) -> Result<()> {
         let mut flag = self.shutdown_flag.lock().unwrap();
         if *flag {

@@ -1,6 +1,6 @@
-//! Testy headera TUI — brand XERV + link do GitHub.
+//! Tests for the TUI header — XERV brand + GitHub link.
 //!
-//! Header jest statycznym Top Barem: nie pokazuje pól diagnostycznych Core
+//! Header is a static Top Bar: no Core diagnostics fields
 //! (status, API, schema, uptime, data dir, state file, log, boot).
 
 use ratatui::backend::TestBackend;
@@ -53,7 +53,7 @@ fn header_contains_github_link() {
 fn header_does_not_contain_core_diagnostics() {
     let mut app = make_app();
     let s = render(&mut app, 120, 24);
-    // Header nie powinien pokazywać pól diagnostycznych Core UI.
+    // Header must not show Core diagnostics fields.
     for forbidden in ["api 0.1.0", "schema", "uptime", "boot #", "log level"] {
         assert!(!s.contains(forbidden), "header must not show '{forbidden}'");
     }
@@ -62,13 +62,14 @@ fn header_does_not_contain_core_diagnostics() {
 #[test]
 fn header_fits_narrow_terminal() {
     let mut app = make_app();
-    // Wąski terminal — header nie panicuje.
+    // Narrow terminal — header does not panic.
     let _ = render(&mut app, 30, 20);
 }
 
-// ---- footer hint ----------------------------------------------------------------
+// ---- footer hint -----------------------------------------------------------------
 
-/// Zwraca style komórki bufora w (x, y) — pozwala testować kolory, nie tylko tekst.
+/// Returns the style of a buffer cell at (x, y) — allows testing colors,
+/// not just text.
 fn cell_styles(app: &mut App, width: u16, height: u16) -> Vec<Vec<ratatui::style::Style>> {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -79,7 +80,7 @@ fn cell_styles(app: &mut App, width: u16, height: u16) -> Vec<Vec<ratatui::style
         .collect()
 }
 
-/// Pozycja (x,y) pierwszego znaku `needle` w `lines` (char-index).
+/// Position (x,y) of the first character `needle` in `lines` (char-index).
 fn find_cell(lines: &[String], needle: &str) -> Option<(usize, usize)> {
     for (y, l) in lines.iter().enumerate() {
         if let Some(xb) = l.find(needle) {

@@ -1,7 +1,7 @@
-//! Xerv Core — minimalny fundament Xerv (Punkt 1).
+//! Xerv Core — the minimal foundation of Xerv (Point 1).
 //!
-//! Zakres: błędy, wersja API, konfiguracja, logowanie, stan, lifecycle.
-//! Poza zakresem: TUI, CLI, pluginy, moduły, agenci, sieć, integracje.
+//! Scope: errors, API version, configuration, logging, state, lifecycle.
+//! Out of scope: TUI, CLI, plugins, modules, agents, networking, integrations.
 
 pub mod api;
 pub mod config;

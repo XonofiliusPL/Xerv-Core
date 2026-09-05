@@ -1,7 +1,7 @@
-//! Testy kontraktu API Punktu 2.
+//! API contract tests for Point 2.
 //!
-//! Gwarantują, że Rdzeń wystawia typy zadeklarowane w planie w obu
-//! lokalizacjach (moduł `api` i korzeń `xerv_core`).
+//! Guarantee that the Core exposes types declared in the plan in both
+//! locations (module `api` and crate root `xerv_core`).
 
 use xerv_core::api::{self as api_mod};
 use xerv_core::{CoreConfig, CoreState, XervCore};
@@ -23,7 +23,7 @@ fn contract_holds_for_state() {
 
 #[test]
 fn contract_holds_for_core() {
-    // Funkcja `new` w obu lokalizacjach ma tę samą sygnaturę typu.
+    // Function `new` has the same type signature in both locations.
     let _ = XervCore::new as fn(_, _) -> _;
     let _ = api_mod::XervCore::new as fn(_, _) -> _;
 }
