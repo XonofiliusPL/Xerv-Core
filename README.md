@@ -3,246 +3,281 @@
 [![npm](https://img.shields.io/npm/v/xerv.svg)](https://www.npmjs.com/package/xerv)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
 
-**Modular terminal infrastructure for systems, agents, and automation.**
+**Your unified terminal — monitor, navigate, and automate from one place.**
 
 ---
 
-## 1. Xerv
+## What is Xerv?
 
-Xerv to nowoczesna, terminalowa platforma — miejsce, w którym system monitoringu,
-orkiestracji agentów i automatyzacji spotyka się w jednym miejscu. Zamiast
-przełączać się między dwoma, trzema, a cztery innymi narzędziami, Xerv
-zbiera to, co potrzebujesz, w jednej aplikacji uruchamianej bezpośrednio
-w twoim terminalu.
+If you spend time in a terminal, you have probably felt this: switching between
+`htop`, `dmesg`, `kubectl`, log files, and a dozen other tools just to get a
+complete picture of what is happening. Each tool tells you one thing. None of
+them talk to each other. And none of them adapt to what you need *right now*.
 
-Zbudowany w języku Rust, Xerv jest szybki, niezawodny i pracuje wszędzie,
-gdzie działa terminal — na twoim serwerze, laptopie, czy w sesji SSH.
+Xerv is different. It is a single terminal application that brings monitoring,
+navigation, and automation together in one interactive interface. You launch
+it once, and it becomes your central place for understanding and acting on
+what is happening in your system.
 
----
+Built in Rust, Xerv is fast, reliable, and runs anywhere you have a terminal —
+on your laptop, a remote server over SSH, or an embedded device.
 
-## 2. What is Xerv?
-
-Xerv to interfejs terminalowy, który łączy w sobie trzy potrzebne rzeczy:
-
-- **Obserwację** — podgląd na to, co dzieje się w twoim systemie.
-- **Interakcję** — możliwość reagowania na to, co widzisz, w czasie rzeczywistym.
-- **Automatyzację** — uruchamianie i nadzór nad powtarzalnymi zadaniami.
-
-Pomyślaj o Xerv jako o centrum dowodzenia twoim terminala. To coś więcej niż
-narzędzie CLI — to interfejs, który reaguje na ciebie i na to, co się dzieje
-wokół.
-
-> Xerv jest obecnie w fazie **pre-alpha**. To oznacza, że budujemy fundament.
-> Interfejs, komendy i możliwości będą się rozwijać. To, co dziś widzisz, to
-> szkielet — ale już dzisiaj możesz uruchomić go, zobaczyć pierwszą stronę
-> i dać nam znać, jak ma to wyglądać.
+Xerv is currently in **pre-alpha**: the core is being built. What you see today
+is the beginning — an interactive interface, a command system, and automatic
+updates. You can run it, explore the first screens, and see where it is heading.
 
 ---
 
-## 3. Why Xerv?
+## Why Xerv?
 
-Terminal jest domem wielu programistów, administratorów i inżynierów. Ale
-domyślne narzędzia terminala — `top`, `htop`, `ps`, `dmesg` — każde mówi
-coś innego. Przełączanie się między nimi kurczy swój czas i uwagę.
+Every day, terminal users waste time:
 
-Xerv pyta: **dlaczego nie mieć jednego miejsca?**
+- **Searching** across tools to piece together what is going on.
+- **Remembering** which command does what, in which tool.
+- **Switching contexts** between viewing, diagnosing, and acting.
 
-- Nie musisz zapamiętywać dziesięciu różnych komend.
-- Nie musisz przełączać się między panedkami.
-- Nie musisz zgadywać, co się stało.
+Xerv replaces all of that with one question: **What if your terminal adapted
+to you, not the other way around?**
 
-Xerv daje ci **jedną powierzchnię** — czystą, szybką i pod twoją kontrolą.
+Instead of memorizing a dozen commands across a dozen tools, Xerv gives you a
+single, consistent interface. A place that shows you what matters, lets you
+act on it immediately, and remembers how you like to work.
 
-To, dla kogo Xerv jest przydatny:
+### Who is Xerv for?
 
-| Kto? | Po co? |
-|------|--------|
-| **Programista** | Szybki podgląd na aplikację, logi, procesy — bez wychodzenia z terminala. |
-| **Administrator** | Nadzór nad usługami, reakcja na incydenty — w czasie rzeczywistym. |
-| **Inżynier ds. automatyzacji** | Uruchamianie powtarzalnych zadań, monitoring, update’y — z jednego miejsca. |
-| **Każdy, kto pracuje w terminalu** | Czytelny interfejs zamiast stosu tekstowych komend. |
-
----
-
-## 4. What can Xerv do?
-
-Obecnie Xerv oferuje:
-
-- **Interfejs terminalowy (TUI)** — czysty, kolorowy interfejs działający
-  bezpośrednio w twoim terminalu. Nie wymaga GUI.
-- **Nawigacja klawiaturowa** — sterujesz Xerv jedynie z klawiatury.
-- **System komend** — `xerv --version`, `xerv help`, `xerv update` i inne.
-- **Automatyczna kontrola wersji** — Xerv wie, jaką masz wersję i potrafi
-  samemu się aktualizować.
-- **Sprawdzanie aktualizacji** — Xerv sprawdza, czy dostępna jest nowsza wersja,
-  i informuje cię o tym bezpośrednio w interfejsie.
-
-Nie ma jeszcze monitoringu procesów, logów ani dashboardów. To dopiero
-początek — Xerv ma je dodać.
+| You are... | Xerv helps you... |
+|---|---|
+| **A developer** | See your app, logs, and processes in one view — no tab-switching. |
+| **A system administrator** | React to incidents fast, in a single screen, without leaving the terminal. |
+| **An automation engineer** | Orchestrate, monitor, and update your tools from one control center. |
+| **Anyone who works in a terminal** | A clean, keyboard-driven interface instead of a wall of commands. |
 
 ---
 
-## 5. Features
+## What Can Xerv Do Today?
 
-| Funkcja | Co to daje? | Po co? |
-|--------|-------------|--------|
-| **Terminal User Interface (TUI)** | Czytelny, kolorowy interfejs w twoim terminalu | Nie musisz wchodzić w struktury tekstowe — wszystko widzisz graficznie |
-| **Klawiaturowa nawigacja** | Sterowanie całego interfejsu z klawiatury | Nie musisz zwalaniać myszy — poruszasz się szybko i precyzyjnie |
-| **System komend (CLI)** | `xerv --version`, `xerv help`, `xerv update` | Szybki dostęp do najważniejszych działań bez uruchamiania całego TUI |
-| **Automatyczna aktualizacja** | Xerv sam sprawdza i pobiera nowe wersje | Zawsze masz najnowsze poprawki i funkcje — bez ręcznej roboty |
-| **Wbudowany update z rollbackiem** | Aktualizacja jest atomiczna, a w razie błędu Xerv wraca do poprzedniej wersji | Bezpieczna aktualizacja — nigdy nie zostaniesz z uszkodzoną instalacją |
+Xerv offers a solid foundation — and a clear path forward:
 
----
+- **An interactive terminal UI** that runs directly in your terminal window.
+  No GUI, no browser — just your terminal.
+- **Keyboard-driven navigation** — move through the interface, open sections,
+  and trigger actions using only your keyboard.
+- **A built-in command system** — quick commands like `xerv --version`,
+  `xerv help`, and `xerv update` for common tasks.
+- **Automatic version tracking** — Xerv knows what version you are running
+  and can update itself.
+- **Self-updating with rollback** — when a new version is available, Xerv
+  downloads it, verifies its checksum, and installs it atomically. If
+  something goes wrong, it rolls back automatically.
 
-## 6. The Xerv Interface
-
-Xerv uruchamia się jako interfejs terminalowy (TUI). Otwiera się w twoim
-oknie terminala — nie musisz niczego uruchamiać osobno.
-
-Interfejs składa się z:
-
-- **Nagłówka** — pokazuje nazwę projektu, wersję i status.
-- **Panelu bocznego** — nawigacja po sekcjach.
-- **Obszaru głównego** — miejsce, gdzie wyświetlane są dane.
-- **Paska poleceń** — wpisz komendę, aby szybko wykonać akcję.
-
-Nawigacja:
-
-| Klawisz | Akcja |
-|--------|-------|
-| `↑ ↓ ← →` | Przesuwaj się po interfejsie |
-| `Enter` | Wejdź w wybraną pozycję |
-| `Backspace` | Wróć |
-| `q` lub `Esc` | Wyjdź |
-| `h` | Otwórz pomoc |
-| `U` | Otwórz ekran aktualizacji (gdy dostępna) |
-
-> 📸 **Screenshots i demo będą dostępne wkrótce.** Ta sekcja czeka na materiały
-> wizualne, gdy interfejs zostanie ostatecznie dopracowany.
+What is **not** here yet: process monitoring, log streaming, dashboards,
+custom data views. These are coming. Today is about the interface and the
+foundation.
 
 ---
 
-## 7. Installation
+## Features
 
-Xerv jest instalowany jak każdy pakiet npm — bez uprawnień roota:
+### Interactive Terminal Interface (TUI)
+
+Xerv opens a full-screen interface inside your terminal. There is no separate
+app to install, no browser tab, no background service. It runs where you work.
+
+**Why it matters:** You see everything in one place. No more jumping between
+tools — Xerv brings the information you need directly to your terminal window.
+
+### Keyboard-Driven Navigation
+
+Every part of the Xerv interface — menus, sections, commands — is controlled
+by your keyboard. Arrow keys, Enter, and a few shortcuts are all you need.
+
+**Why it matters:** You stay in flow. No reaching for the mouse, no hunting
+through menus. Muscle memory takes over quickly.
+
+### Command System
+
+Beyond the TUI, Xerv exposes a simple command-line interface:
+
+```bash
+xerv              # Launch the interactive interface
+xerv help         # See all available commands
+xerv version      # Check your installed version
+xerv update       # Download and install the latest release
+```
+
+**Why it matters:** Sometimes you just need one piece of information — and
+you want it fast. Quick commands let you get answers without entering the
+full interface.
+
+### Automatic Updates with Rollback
+
+Xerv checks for new releases, downloads them, verifies their integrity with
+a SHA-256 checksum, and installs them atomically. If an update fails for any
+reason, Xerv automatically restores the previous version.
+
+**Why it matters:** You always get the latest fixes and features — safely.
+A broken update should never leave you stranded. With Xerv, it does not.
+
+---
+
+## The Xerv Interface
+
+When you launch `xerv`, a full-screen terminal interface opens. It is divided
+into clear, purposeful sections:
+
+- **Header** — shows the project name, version, and live status.
+- **Sidebar** — navigable menu of available sections.
+- **Main area** — displays the content of the selected section.
+- **Command bar** — type `help`, `version`, or any supported command for
+  quick access without leaving the interface.
+
+### Navigation
+
+| Key | Action |
+|---|---|
+| `↑ ↓ ← →` | Move through the interface |
+| `Enter` | Open the selected section |
+| `Backspace` | Go back |
+| `q` or `Esc` | Quit |
+| `h` | Open in-interface help |
+| `U` | Open the update screen (when an update is available) |
+| `y` | Confirm an action (e.g., update) |
+| `n` | Cancel an action |
+
+> 📸 **Screenshots and animated demos** are coming once the interface is
+> finalized. This space is reserved for visual walkthroughs.
+
+---
+
+## Installation
+
+Xerv is installed like any Node package — in your user space, no `sudo` needed:
 
 ```bash
 npm install -g xerv
 ```
 
-> Wymaga: Node.js 18+ (dla npm) oraz system Linux lub macOS.
+Requires Node.js 18+ and a Linux or macOS system.
 
 ---
 
-## 8. Getting Started
+## Getting Started
 
-Po zainstalowaniu uruchom Xerv:
+After installing, launch Xerv:
 
 ```bash
 xerv
 ```
 
-To otworzy interfejs terminalowy. Możesz także użyć szybkich komend:
+That is it. The interactive interface opens immediately.
+
+Want to check your version or see what commands are available?
 
 ```bash
-xerv           # Uruchom TUI
-xerv help      # Pokaż dostępne komendy
-xerv version   # Pokaż wersję
+xerv version     # Shows the installed Xerv version
+xerv help        # Lists all available commands
 ```
 
 ---
 
-## 9. Updating
+## Updating
 
-Xerv może być aktualizowany na dwa sposoby:
+You can update Xerv in two ways:
 
-1. **Wewnątrz TUI** — Xerv sam sprawdza dostępność nowej wersji i wyświetla
-   powiadomienie. Wystarczy wybrać `Update` i potwierdzić.
-2. **Z linii komend**:
+1. **From inside the TUI** — when a new version is available, Xerv shows an
+   update notification. Open the update screen with `U`, confirm with `y`.
+
+2. **From the command line**:
 
 ```bash
 xerv update
 ```
 
-Pobiera najnowszą wersję, weryfikuje ją i instaluje. W razie problemu
-Xerv automatycznie przywraca poprzednią wersję.
+This downloads the latest release, verifies it, and installs it atomically
+with automatic rollback on failure.
 
-> Obecnie system aktualizacji sprawdza wersję na GitHubie i pobiera
-> gotowy binarny plik. To działa jako prototyp — w przyszłości będzie
-> obsługiwał dodatki i rozszerzenia.
+> The current update system checks GitHub for new releases, downloads the
+> binary, and verifies a SHA-256 checksum. This is a working prototype —
+> future versions will extend this to addons and modular components.
 
 ---
 
-## 10. Uninstall
+## Uninstall
+
+Remove Xerv completely:
 
 ```bash
 npm uninstall -g xerv
 ```
 
-To całkowicie usuwa Xerv i wszystkie powiązane pliki.
+This removes the binary and all associated files.
 
 ---
 
-## 11. Addons / Plugins / Modules
+## Addons, Plugins, and Modules
 
-> **[Planned]** System dodatków (addons/plugins/modules) jeszcze nie istnieje.
-> Xerv ma go w przyszłości — pozwoli on dodawać nowe widoki, źródła danych
-> i automatyzacje bez modyfikacji rdzenia projektu.
+Xerv is being designed to support a future **addons ecosystem** — a way to
+extend functionality with custom views, data sources, and automation modules
+without modifying the core.
 
-Jeśli chcesz pomóc w zaprojektowaniu tego systemu — zerknij do
-[Issues](https://github.com/XonofiliusPL/Xerv-Core/issues).
+> **[Planned]** The addons/plugins/modules system does not exist yet. This
+> section is reserved for future functionality and will be populated once the
+> architecture is finalized.
 
----
-
-## 12. Screenshots / Demo
-
-> Materiały wizualne będą dodane, gdy interfejs zostanie ostatecznie
-> dopracowany. Ta sekcja czeka na screenshots i nagrania GIF.
+Interested in helping shape the addon API? [Open an issue](https://github.com/XonofiliusPL/Xerv-Core/issues).
 
 ---
 
-## 13. Roadmap
+## Screenshots / Demo
 
-| Co? | Status |
-|-----|--------|
-| Xerv Core (Rust) — error handling, config, state | ✅ Done |
-| Stabline API i wersjonowanie | ✅ Done |
-| Agent Workspace (model, drzewo) | ✅ Done |
-| TUI — nawigacja, interfejs, identyfikacja wizualna | ✅ Done |
-| System aktualizacji — GitHub release, checksum, atomic replace | ✅ Done |
-| dystrybucja przez npm (`npm install -g xerv`) | ✅ Done |
-| Monitoring procesów i systemu | 🔶 Planned |
-| Logi i streamowanie danych w TUI | 🔷 Future |
-| System dodatków (addons/plugins/modules) | 🔷 Future |
-| Motywy i personalizacja wyglądu | 🔷 Future |
-
-Legend: ✅ = gotowe | 🔶 = planowane | 🔷 = w przyszłości
+> Visual materials will be added once the interface is finalized. This
+> section is reserved for screenshots and animated demonstrations.
 
 ---
 
-## 14. Project Status
+## Roadmap
 
-**● Pre-alpha — intensywny rozwój**
+| Feature | Status |
+|---|---|
+| Rust Core — errors, config, state, logging, lifecycle | ✅ Done |
+| Stable API and versioning | ✅ Done |
+| Agent Workspace with state model and workspace tree | ✅ Done |
+| Terminal UI — navigation, layout, visual identity | ✅ Done |
+| Update system — GitHub releases, checksum, atomic install | ✅ Done |
+| npm distribution — `npm install -g xerv` | ✅ Done |
+| Process and system monitoring views | 🔶 Planned |
+| Log streaming and data integration in TUI | 🔷 Future |
+| Addons / plugins / modules system | 🔷 Future |
+| Themes and visual customization | 🔷 Future |
 
-Xerv Core jest w trakcie aktywnego rozwoju. To, co dzisiaj widzisz, to
-fundament — interfejs, system komend, aktualizacje. API, architektura i
-wszystkie szczegóły mogą ulec zmianie.
+**Legend:** ✅ Done · 🔶 Planned · 🔷 Future
 
 ---
 
-## 15. Links
+## Project Status
+
+**Pre-alpha — active development**
+
+Xerv is in early development. Today's release is a functional foundation — an
+interactive interface, a command system, and automatic, safe updates. APIs,
+architecture, and behavior will evolve as Xerv grows.
+
+---
+
+## Links
 
 - **GitHub**: [XonofiliusPL/Xerv-Core](https://github.com/XonofiliusPL/Xerv-Core)
 - **npm**: [xerv](https://www.npmjs.com/package/xerv)
-- **Issues**: [Zgłoś problem](https://github.com/XonofiliusPL/Xerv-Core/issues)
-- **Changelog**: [Commits](https://github.com/XonofiliusPL/Xerv-Core/commits/main)
+- **Report an issue**: [GitHub Issues](https://github.com/XonofiliusPL/Xerv-Core/issues)
+- **View changes**: [Commit history](https://github.com/XonofiliusPL/Xerv-Core/commits/main)
 
 ---
 
 ## License
 
-Xerv Core jest przeznaczony do publikacji na licencji **MIT OR Apache-2.0**.
+Xerv Core is intended to be released under the **MIT OR Apache-2.0** dual
+license.
 
 ---
 
-*Xerv — zbudowany w Rust. Dla każdego, kto pracuje w terminalu.*
+*Xerv — built in Rust. For everyone who works in a terminal.*
