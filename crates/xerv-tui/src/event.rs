@@ -4,31 +4,28 @@ use crossterm::event::{
 
 /// Zdarzenia akcyjne (wejścia) obsługiwane przez aplikację.
 ///
-/// Każdy wariant mapuje się 1:1 na akcję `App::handle_event`. Zdarzenia myszy
-/// (`Hover`/`Click`) są tworzone w `From<MouseEvent>` i przekazywane bezpośrednio
-/// — hit-test odbywa się w `App::handle_event`.
+/// Każdy wariant mapuje się 1:1 na akcję `App::handle_event`. Zdarzenia
+/// myszy (`Hover`/`Click`) tworzone są w `From<MouseEvent>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
+    /// q / Esc — zawsze kończy aplikację.
     Quit,
-    NextPanel,
-    PrevPanel,
-    Refresh,
-    NextCommand,
-    PrevCommand,
-    SelectCommand,
-    /// Kursor nawigacji sidebaru w dół (↑/↓ gdy fokus na Side).
+    /// Strzałki w dół / prawo (w Screen::Main) — przesuwa cursor.
     NavDown,
-    /// Kursor nawigacji sidebaru w górę.
+    /// Strzałki w górę / lewo (w Screen::Main) — przesuwa cursor.
     NavUp,
-    /// Potwierdzenie pozycji nawigacji (Enter/Space gdy fokus na Side).
-    NavActivate,
-    /// Pierwsza pozycja (Home).
-    NavHome,
-    /// Ostatnia pozycja (End).
-    NavEnd,
-    /// Ruch myszy na (col, row) — aktualizuje highlight (czysty nakładnik).
+    /// Lef/Right aliases.
+    NavLeft,
+    NavRight,
+    /// Enter / Space — potwierdza aktualną pozycję (OpenScreen/Activate).
+    Confirm,
+    /// Backspace — powrót do poprzedniego widoku (Return).
+    Return,
+    /// h — otwiera Help (z dowolnego widoku).
+    OpenHelp,
+    /// Ruch myszy na (col, row) — czysty highlight (magenda), nie zmienia cursor.
     Hover(u16, u16),
-    /// Kliknięcie myszą na (col, row) — hit-test na bieżąco w `App::handle_event`.
+    /// Kliknięcie myszą na (col, row) — aktywacja pozycji.
     Click(u16, u16),
     Tick,
 }
@@ -36,7 +33,7 @@ pub enum Event {
 /// Konwersja z `crossterm::event::MouseEvent` → `Event`.
 ///
 /// MouseMove → `Hover`, Left Click → `Click`, inne przyciski/ruchy → `Tick`
-/// (ignorowany — nie ma right-click/context menu).
+/// (ignorowany — brak right-click/context menu).
 impl From<MouseEvent> for Event {
     fn from(m: MouseEvent) -> Self {
         let (col, row) = (m.column, m.row);
@@ -62,19 +59,15 @@ pub fn read_event() -> std::io::Result<Event> {
             }) => {
                 return Ok(match code {
                     KeyCode::Char('q') | KeyCode::Esc => Event::Quit,
-                    KeyCode::Char('?') => Event::Quit,
-                    KeyCode::Tab => Event::NextPanel,
-                    KeyCode::BackTab => Event::PrevPanel,
-                    KeyCode::Char('r') => Event::Refresh,
-                    KeyCode::Right => Event::NextCommand,
-                    KeyCode::Left => Event::PrevCommand,
-                    KeyCode::Enter => Event::NavActivate,
-                    KeyCode::Char(' ') => Event::NavActivate,
-                    // ↑/↓: nawigacja sidebaru; Enter/Space potwierdza.
-                    KeyCode::Down => Event::NavDown,
-                    KeyCode::Up => Event::NavUp,
-                    KeyCode::Home => Event::NavHome,
-                    KeyCode::End => Event::NavEnd,
+                    // h — Help (globalny skrót).
+                    KeyCode::Char('h') => Event::OpenHelp,
+                    KeyCode::Tab => Event::NavRight,
+                    KeyCode::BackTab => Event::NavLeft,
+                    KeyCode::Enter | KeyCode::Char(' ') => Event::Confirm,
+                    KeyCode::Backspace => Event::Return,
+                    // ↑/↓ oraz ←/→ — nawigacja w Screen::Main.
+                    KeyCode::Down | KeyCode::Right => Event::NavDown,
+                    KeyCode::Up | KeyCode::Left => Event::NavUp,
                     _ => continue,
                 });
             }
