@@ -250,10 +250,68 @@ pub struct App {
     pub activity: Vec<ActivityEntry>,
 }
 
-/// Liczba komend w command barze Dashboardu. Punkt 3 nie implementuje akcji —
-/// to są sloty na przyszłe moduły/agenty (zgodnie z kierunkiem rozszerzania Xerv).
-pub const COMMAND_COUNT: usize = 6;
+/// Akcja w Command Barze — prezentuje dostępne akcje dla bieżącego kontekstu.
+///
+/// Command Bar nie jest drugą listą nawigacji — to pasek akcji, który
+/// komplementuje Sidebar (główna nawigacja) i przygotowuje UI pod przyszłe
+/// akcje agenta/workspace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandAction {
+    /// Krótka nazwa akcji (wyświetlana jako label).
+    pub label: &'static str,
+    /// Unicode symbol ikony (Nerd Font glyphy, bez fallbacku — szerokość = 1 col).
+    pub icon: char,
+    /// Skrót klawiaturowy (wyświetlany po prawej stronie labelu).
+    pub shortcut: &'static str,
+    /// Czy akcja jest już implementowana? `false` = placeholder (mutowana stylować).
+    pub ready: bool,
+}
 
+/// Lista akcji w Command Barze — uporządkowana od najważniejszej.
+/// Każdy slot ma: ikonka + label + skrót. `ready=false` = przyszła akcja.
+pub const COMMAND_ACTIONS: [CommandAction; 6] = [
+    CommandAction {
+        label: "modules",
+        icon: '\u{e74d}',
+        shortcut: "m",
+        ready: false,
+    },
+    CommandAction {
+        label: "agents",
+        icon: '\u{f0c1}',
+        shortcut: "a",
+        ready: false,
+    },
+    CommandAction {
+        label: "registry",
+        icon: '\u{f0c9}',
+        shortcut: "r",
+        ready: false,
+    },
+    CommandAction {
+        label: "services",
+        icon: '\u{f013}',
+        shortcut: "s",
+        ready: false,
+    },
+    CommandAction {
+        label: "logs",
+        icon: '\u{f0f7}',
+        shortcut: "l",
+        ready: false,
+    },
+    CommandAction {
+        label: "config",
+        icon: '\u{f009}',
+        shortcut: "c",
+        ready: false,
+    },
+];
+
+/// Liczba akcji w command barze (wynikająca z COMMAND_ACTIONS).
+pub const COMMAND_COUNT: usize = COMMAND_ACTIONS.len();
+
+/// Nazwy slotów — zachowane dla kompatybilności z istniejącymi testami/kodem.
 pub const COMMANDS: [&str; COMMAND_COUNT] = [
     "modules", "agents", "registry", "services", "logs", "config",
 ];

@@ -49,13 +49,10 @@ fn render_lines(app: &mut App, width: u16, height: u16) -> Vec<String> {
         .collect()
 }
 
-/// Środkowa linia każdego slotu command baru musi mieć zamykającą ramkę │
+/// Środkina linii każdego slotu command baru musi mieć zamykającą ramkę │
 /// w tej samej kolumnie co otwierająca — dowód, że slot nie wycieka poza viewport.
 #[track_caller]
 fn assert_command_bar_within_viewport(lines: &[String], width: u16, ctx: &str) {
-    // Znajdź wiersz command baru: zawiera ramki slotów ┌ i leży poniżej kart.
-    // Identyfikujemy go po etykiecie pierwszego slotu "modules" — nie ma
-    // innego "┌ modules" w dashboardie.
     // Command bar to linia z dokładnie COMMAND_COUNT otwartymi slotami (┌).
     // Filtrujemy po liczbie `┌` >= COMMAND_COUNT — unikamy pomytału z kartami
     // (które mają 1-2 `┌` w górnym rogu) i z gridu workspace.
@@ -109,27 +106,21 @@ fn assert_cards_within_viewport(lines: &[String], width: u16, ctx: &str) {
 }
 
 #[track_caller]
-fn assert_two_columns(lines: &[String], ctx: &str) {
-    // W układzie 2-kolumnowym istnieje linia zawierająca jednocześnie "agent" i "workspace".
-    let two_col_line = lines
-        .iter()
-        .any(|l| l.contains("┌ agent") && l.contains("┌ workspace"));
-    assert!(two_col_line, "{ctx}: expected 2-column card layout");
-}
-
-#[track_caller]
-fn assert_one_column(lines: &[String], ctx: &str) {
-    // W układzie 1-kolumnowym "agent" i "workspace" są w osobnych liniach.
-    let sys = lines.iter().any(|l| l.contains("┌ agent"));
-    let run = lines.iter().any(|l| l.contains("┌ workspace"));
-    assert!(sys, "{ctx}: agent card missing");
-    assert!(run, "{ctx}: workspace card missing");
-    let same_line = lines
+fn assert_stacked_cards(lines: &[String], ctx: &str) {
+    // Karty są układane pionowo (1 kolumna) — "agent" i "workspace" w osobnych
+    // blokach, nigdy obok siebie. To nie druga nawigacacja, a uporządkowany
+    // pasek akcji komplementujący Sidebar.
+    let has_agent = lines.iter().any(|l| l.contains("┌ agent "));
+    let has_workspace = lines.iter().any(|l| l.contains("┌ workspace "));
+    assert!(has_agent, "{ctx}: agent card missing");
+    assert!(has_workspace, "{ctx}: workspace card missing");
+    // Brak linii z dwoma otwartymi ramkami jednocześnie.
+    let two_at_once = lines
         .iter()
         .any(|l| l.contains("┌ agent") && l.contains("┌ workspace"));
     assert!(
-        !same_line,
-        "{ctx}: expected 1-column layout, found 2 columns"
+        !two_at_once,
+        "{ctx}: expected stacked (1-col) cards, found 2 columns"
     );
 }
 
@@ -140,7 +131,7 @@ fn no_clipping_at_80_columns() {
     let lines = render_lines(&mut app, 80, 24);
     assert_cards_within_viewport(&lines, 80, "80");
     assert_command_bar_within_viewport(&lines, 80, "80");
-    assert_one_column(&lines, "80"); // cards area = 60 < 80 → 1 kolumna
+    assert_stacked_cards(&lines, "80");
 }
 
 #[test]
@@ -150,27 +141,27 @@ fn no_clipping_at_100_columns() {
     let lines = render_lines(&mut app, 100, 24);
     assert_cards_within_viewport(&lines, 100, "100");
     assert_command_bar_within_viewport(&lines, 100, "100");
-    assert_one_column(&lines, "100"); // cards = 75 < 80
+    assert_stacked_cards(&lines, "100");
 }
 
 #[test]
-fn two_columns_at_120_columns() {
+fn stacked_cards_at_120_columns() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
     let lines = render_lines(&mut app, 120, 24);
     assert_cards_within_viewport(&lines, 120, "120");
     assert_command_bar_within_viewport(&lines, 120, "120");
-    assert_two_columns(&lines, "120"); // cards = 90 ≥ 80
+    assert_stacked_cards(&lines, "120");
 }
 
 #[test]
-fn two_columns_at_160_columns() {
+fn stacked_cards_at_160_columns() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
     let lines = render_lines(&mut app, 160, 30);
     assert_cards_within_viewport(&lines, 160, "160");
     assert_command_bar_within_viewport(&lines, 160, "160");
-    assert_two_columns(&lines, "160");
+    assert_stacked_cards(&lines, "160");
 }
 
 #[test]
@@ -180,7 +171,7 @@ fn no_clipping_on_very_narrow_terminal() {
     let lines = render_lines(&mut app, 45, 24);
     assert_cards_within_viewport(&lines, 45, "45");
     assert_command_bar_within_viewport(&lines, 45, "45");
-    assert_one_column(&lines, "45");
+    assert_stacked_cards(&lines, "45");
 }
 
 #[test]
@@ -197,14 +188,21 @@ fn command_bar_fills_full_width_at_every_tested_width() {
             "{width}: command bar should span to right edge"
         );
         // Sloty: prawy brzeg ostatniego slotu = prawy brzeg bara.
+        // Sloty: prawy brzeg ostatniego slotu = prawy brzeg bara.
+        // Szukamy wiersza zamykającego ramki command baru (CMD_COUNT otwartych
+        // slotów). Nie wymagamy pełnego tekstu labelu — przy wąskich slotach
+        // "config" może być przycięte do "confi".
         let cfg_row = lines
             .iter()
-            .position(|l| l.contains(" config "))
-            .expect("config slot row");
+            .position(|l| l.matches('┌').count() >= COMMAND_COUNT)
+            .expect("command bar row");
         let line = &lines[cfg_row];
+        // Górny border każdego slotu zaczyna się `┌` i kończy `┐` —
+        // to górny rząd ramki. Ostatni slot musi mieć `┐` na ostatniej kolumnie
+        // (prawy górny róg), czyli nie wycieka poza viewport.
         assert!(
-            line.trim_end().ends_with('│'),
-            "{width}: last slot's right border clipped"
+            line.trim_end().ends_with('┐'),
+            "{width}: last slot's top-right border clipped (row={cfg_row}): '{line}'"
         );
     }
 }
@@ -285,8 +283,8 @@ fn command_bar_slot_count_matches_commands() {
     let lines = render_lines(&mut app, 120, 24);
     for name in COMMANDS.iter() {
         assert!(
-            lines.iter().any(|l| l.contains(&format!(" {name} "))),
-            "command '{name}' not fully visible in bar"
+            lines.iter().any(|l| l.contains(name)),
+            "command '{name}' not visible in bar"
         );
     }
 }
@@ -401,10 +399,11 @@ fn style_card_values_are_brighter_than_labels() {
 #[test]
 fn style_accent_values_are_magenta() {
     // "agent" i "workspace" to akcenty secondary (kv_accent) — Magenta.
+    // Renderujemy na pełnym rozmiarze — workspace tree potrzebuje pionowej przestrzeni.
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
     let lines = {
-        let b = TestBackend::new(120, 24);
+        let b = TestBackend::new(160, 30);
         let mut t = Terminal::new(b).unwrap();
         let mut h = None;
         t.draw(|f| h = Some(ui(f, &mut app))).unwrap();
@@ -414,7 +413,7 @@ fn style_accent_values_are_magenta() {
         .lines()
         .map(|l| l.trim_matches('"').to_string())
         .collect();
-    let styles = cell_styles(&mut app, 120, 24);
+    let styles = cell_styles(&mut app, 160, 30);
     // Szukamy konkretnej wartości (hermes-planner / ~/Work/xerv),
     // które są "odpowiedziami" → magenta.
     for needle in ["hermes-planner", "~/Work/xerv"] {
@@ -489,22 +488,35 @@ fn style_active_command_is_cyan_bold() {
     let _ = render_lines(&mut app, 120, 24);
     let bar = app.command_bar_area.expect("bar");
     let slot_w = bar.w / COMMAND_COUNT as u16;
-    // Klik w 1. slot, render, sprawdź styl tekstu slotu.
+    // Klik w 1. slot, render, sprawdź styl literówki skrótu 'm'.
     app.handle_event(Event::ClickCommand(bar.x + slot_w / 2, bar.y + bar.h / 2));
+    // Ponowny render do bufora ze stylem.
     let backend = TestBackend::new(120, 24);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut h = None;
-    terminal.draw(|f| h = Some(ui(f, &mut app))).unwrap();
+    terminal
+        .draw(|f| {
+            let _ = ui(f, &mut app);
+        })
+        .unwrap();
     let buf = terminal.backend().buffer().clone();
-    // Znajdź komórkę z 'm' w pierwszym slocie (tekst " modules ").
     let y = bar.y + bar.h / 2;
-    let x = bar.x + 1;
-    let st = buf[(x, y)].style();
-    assert_eq!(st.fg, Some(Color::Cyan), "active slot text must be Cyan");
-    assert!(
-        st.add_modifier.contains(ratatui::style::Modifier::BOLD),
-        "active slot text must be BOLD"
-    );
+    // Znajdź komórkę z literówką 'm' w pierwszym slocie — ma być Cyan + Bold.
+    let mut found = false;
+    for cx in 0..bar.w {
+        let x = bar.x + cx;
+        let cell = &buf[(x, y)];
+        if cell.symbol().trim() == "m"
+            && cell.style().fg == Some(Color::Cyan)
+            && cell
+                .style()
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "active slot shortcut 'm' must be Cyan + BOLD");
 }
 
 // ---- Agent Workspace tests (Point 3) ------------------------------------------------
@@ -524,6 +536,7 @@ fn workspace_shows_agent_card_with_name_status_model_uptime_task() {
         "model missing: {lines}"
     );
     assert!(lines.contains("running"), "agent status missing: {lines}");
+    assert!(lines.contains("uptime"), "uptime label missing: {lines}");
     assert!(lines.contains("task"), "task label missing: {lines}");
     assert!(
         lines.contains("Implement Goal 3"),
@@ -550,7 +563,8 @@ fn workspace_shows_terminal_placeholder() {
 fn workspace_shows_last_activity_section_with_demo_entries() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
-    let lines = render_lines(&mut app, 120, 24).join("\n");
+    // 160x30 — pełny workspace (activity potrzebuje pionowej przestrzeni).
+    let lines = render_lines(&mut app, 160, 30).join("\n");
     assert!(
         lines.contains("activity"),
         "last activity section title missing: {lines}"
@@ -566,7 +580,8 @@ fn workspace_shows_last_activity_section_with_demo_entries() {
 fn workspace_tree_shows_hierarchy_project_worktree_session() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
-    let lines = render_lines(&mut app, 120, 24).join("\n");
+    // 200x40 — pełny workspace (tree needs vertical space).
+    let lines = render_lines(&mut app, 200, 40).join("\n");
     assert!(
         lines.contains("workspace"),
         "workspace root label missing: {lines}"

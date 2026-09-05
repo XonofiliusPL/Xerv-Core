@@ -7,8 +7,8 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::app::{
-    AgentStatus, App, Area, Panel, UiAreas, WorkspaceModel, WorktreeKind, COMMANDS, COMMAND_COUNT,
-    SIDEBAR_COUNT, SIDEBAR_ITEMS,
+    AgentStatus, App, Area, Panel, UiAreas, WorkspaceModel, WorktreeKind, COMMAND_ACTIONS,
+    COMMAND_COUNT, SIDEBAR_COUNT, SIDEBAR_ITEMS,
 };
 
 const HEADER_HEIGHT: u16 = 4;
@@ -39,6 +39,8 @@ pub fn ui(f: &mut Frame, app: &mut App) -> UiAreas {
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(COMMAND_BAR_HEIGHT)])
         .split(chunks[1]);
+    // Command bar is 3 rows, fixed.
+    // Command bar is 3 rows, fixed below the main content.
     let cmd_area = main_chunks[1];
     let (side_rect, cards) = draw_main(f, main_chunks[0], app);
     draw_command_bar(f, cmd_area, app);
@@ -332,49 +334,66 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
 // Karty w gridzie oraz terminal/activity mają nagłówek z ikoną.
 // Karty aktywne (agent) mają ramkę cyan; inne muted — zgodnie z DESIGN.md.
 
-const TERMINAL_PLACEHOLDER_HEIGHT: u16 = 6;
+const TERMINAL_PLACEHOLDER_HEIGHT: u16 = 4;
 const ACTIVITY_MAX_ROWS_SMALL: usize = 3; // demo: 3 wpisy
 
 /// Agent Workspace dashboard: status strip + workspace grid + terminal + activity.
 /// Zwraca obszary kart (dla hit-testów w przyszłości).
 fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
+    // Układ pionowy:
+    //   1. Status strip (1 wiersz)
+    //   2. Agent card (9 wierszy max — name/model/status/uptime/sep/task)
+    //   3. Workspace tree (Min — dostaje resztę)
+    //   4. Terminal placeholder (8 wierszy)
+    //   5. Last activity (Min, max 3 wpisy)
+    //
+    // Priorytet: agent card > terminal > workspace tree > last activity.
+    // Gdy wysokość jest mała, workspace tree i last activity mogą ustąpić —
+    // agent card i terminal dostają priorytet (stałe LENGTH).
+    // Agent card: 6 pól treści (agent, model, status, uptime, task + separator)
+    // + 2 border = 8. Workspace tree i last activity mogą ustąpić priorytetem.
+    const AGENT_CARD_H: u16 = 8;
+    const TERM_ROWS: u16 = TERMINAL_PLACEHOLDER_HEIGHT + 2; // = 5
+    let min_needed = 1 + AGENT_CARD_H + 1 + TERM_ROWS + 1;
+    let has_activity = area.height >= min_needed;
+    let has_tree = area.height >= 1 + AGENT_CARD_H + TERM_ROWS;
+
+    let constraints: Vec<Constraint> = {
+        let mut c = vec![
+            Constraint::Length(1),            // status strip
+            Constraint::Length(AGENT_CARD_H), // agent card
+        ];
+        if has_tree {
+            c.push(Constraint::Min(0)); // workspace tree (0 = may collapse if no space)
+        }
+        c.push(Constraint::Length(TERM_ROWS));
+        if has_activity {
+            c.push(Constraint::Min(0)); // last activity (0 = may collapse)
+        }
+        c
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),                               // status strip
-            Constraint::Min(3), // workspace grid (agent + workspace tree)
-            Constraint::Length(TERMINAL_PLACEHOLDER_HEIGHT + 2), // terminal
-            Constraint::Min(1), // last activity
-        ])
+        .constraints(constraints.as_slice())
         .split(area);
 
     draw_status_strip(f, chunks[0], app);
-    let cards = draw_workspace_grid(f, chunks[1], app);
-    draw_terminal_placeholder(f, chunks[2]);
-    draw_last_activity(f, chunks[3], app);
-    cards
-}
 
-/// Workspace grid: lewa kolumna = Agent info, prawa = Workspace tree.
-/// Na wąskich terminalach (< 80) układa karty pionowo (1 kolumna).
-fn draw_workspace_grid(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
+    // Agent card zawsze na chunks[1]. Workspace tree na chunks[2] (jeśli exists).
     let mut areas = Vec::new();
     let ws = &app.workspace;
-
-    let card_chunks = if area.width >= 80 {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area)
+    if has_tree {
+        draw_agent_card(f, chunks[1], ws, app, &mut areas);
+        draw_workspace_tree_card(f, chunks[2], ws, &mut areas);
+        draw_terminal_placeholder(f, chunks[3]);
+        if has_activity {
+            draw_last_activity(f, chunks[4], app);
+        }
     } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(8), Constraint::Min(1)])
-            .split(area)
-    };
-
-    draw_agent_card(f, card_chunks[0], ws, app, &mut areas);
-    draw_workspace_tree_card(f, card_chunks[1], ws, &mut areas);
+        draw_agent_card(f, chunks[1], ws, app, &mut areas);
+        draw_terminal_placeholder(f, chunks[2]);
+    }
     areas
 }
 
@@ -394,7 +413,6 @@ fn draw_agent_card(
         kv("model", &agent.model),
         status_kv_agent(agent.status),
         kv("uptime", &agent.uptime.format()),
-        separator_line(),
         kv("task", &agent.current_task),
     ];
     render_card_named(f, area, "agent", lines, is_active, false, areas);
@@ -458,10 +476,6 @@ fn draw_terminal_placeholder(f: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(Span::styled(
             "  $ shell — not initialized (Point 3)",
-            muted_style(),
-        )),
-        Line::from(Span::styled(
-            "  terminal placeholder — will host a real pty in a future point",
             muted_style(),
         )),
         Line::from(Span::raw("")),
@@ -675,11 +689,13 @@ fn kv_accent<'a>(label: &str, value: &str) -> Line<'a> {
 
 // ---- command bar ----------------------------------------------------------------
 
-/// Poziomy pasek komend — sloty na przyszłe moduły (modules/agents/registry/...).
-/// Interaktywny: ←/→ zmienia zaznaczenie, Enter wybiera; mysz klika slot.
+/// Command Bar / Action Bar — komplementuje Sidebar (główna nawigacja).
+/// Prezentuje dostępne akcje dla bieżącego kontekstu z ikoną + skrótem.
+/// Każdy slot jest klikalny myszą i obsługiwany klawiaturą (←→/Enter).
+/// Nie jest to druga nawigacacja — to pasek akcji, przygotowany pod przyszłe
+/// akcje agenta/workspace. Sloty używają ikono (Nerd Font glyphy) + labelu.
 fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
-    // Ratio zamiast Percentage — suma slotów zawsze wypełnia dokładnie `area.width`
-    // (Percentage z zaokrągleń gubi 1-2 kolumny i ostatni slot wychodzi poza krawędź).
+    // Ratio zapewnia, że sloty dokładnie wypełniają szerokość (bez zaokrągleń).
     let slots = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
@@ -688,18 +704,34 @@ fn draw_command_bar(f: &mut Frame, area: Rect, app: &App) {
         ])
         .split(area);
 
-    for (i, name) in COMMANDS.iter().enumerate() {
+    for (i, action) in COMMAND_ACTIONS.iter().enumerate() {
         let selected = app.selected_command == i;
-        // Aktywny slot: cyan ramka + bold cyan tekst (bez REVERSED —
-        // czytelniejszy i mniej agresywny niż pełna inwersja).
+        // Aktywny slot: cyan ramka + bold cyan tekst (bez REVERSED).
+        // Nieaktywny: muted. Placeholder (ready=false) dodatkowo przyciemniony.
         let (border, text) = if selected {
             (accent_primary(), accent_primary_bold())
         } else {
+            // Nieaktywny slot: muted. Placeholder (ready=false) także muted —
+            // brak jeszcze implementowanej akcji nie różni się wizualnie,
+            // dopóki nie ma interakcji. Stylistyczna hierarchia pozostaje
+            // zachowana (muted = nieaktywny, cyan = aktywny).
             (muted_style(), muted_style())
         };
-        let label = format!(" {} ", name);
+
+        // Responsywność: na wąskich slotach (szerokość < 12) pokaż tylko ikonę.
+        let label = if slots[i].width >= 12 {
+            format!(" {} {} ({}) ", action.icon, action.label, action.shortcut)
+        } else if slots[i].width >= 6 {
+            format!(" {} {}", action.icon, action.label)
+        } else {
+            format!(" {} ", action.icon)
+        };
+
         let block = Block::default().borders(Borders::ALL).border_style(border);
-        let p = Paragraph::new(Line::from(Span::styled(label, text))).block(block);
+        let p = Paragraph::new(
+            Line::from(Span::styled(label, text)).alignment(ratatui::layout::Alignment::Center),
+        )
+        .block(block);
         f.render_widget(p, slots[i]);
     }
 }
