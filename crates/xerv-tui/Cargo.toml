@@ -7,7 +7,7 @@ description = "Xerv TUI — first skeleton, consumer of xerv-core"
 license = "MIT OR Apache-2.0"
 
 [[bin]]
-name = "xerv-tui"
+name = "xerv"
 path = "src/main.rs"
 
 [dependencies]
