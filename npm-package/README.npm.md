@@ -1,58 +1,50 @@
-# xerv
+# xerv (npm package)
 
 [![npm](https://img.shields.io/npm/v/xerv.svg)](https://www.npmjs.com/package/xerv)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
 
 **Modular terminal infrastructure for systems, agents, and automation.**
 
-> This is the npm distribution package. It provides the native Rust binary
-> for Xerv. For full documentation, see the
-> [main README](https://github.com/XonofiliusPL/Xerv-Core).
+This is the official npm distribution of Xerv. It provides a small Node.js
+launcher that runs the native Rust binary.
 
-## Installation
+For the full project documentation, see the
+[main README](https://github.com/XonofiliusPL/Xerv-Core#readme).
+
+## Install
 
 ```bash
 npm install -g xerv
 ```
 
-This installs the `xerv` command globally — no `sudo` required.
+No `sudo` needed. Installs to your user directory.
 
 ## Usage
 
 ```bash
-xerv              # Launch Xerv TUI
-xerv help         # Show commands
-xerv version      # Print version
-xerv update       # Update to latest release
+xerv              # Launch the Xerv TUI
+xerv help         # Show available commands
+xerv version      # Print Xerv version
+xerv update       # Update to the latest release
 ```
 
-To uninstall:
+## Uninstall
 
 ```bash
 npm uninstall -g xerv
 ```
 
-## What This Package Contains
+## What's Inside
 
-- `cli.js` — a minimal Node.js launcher that locates and runs the native
-  binary. It contains **no Xerv logic** — Rust is the sole implementation.
-- `bin/xerv` — the pre-built native Rust binary for Linux x86_64.
-
-This wrapper simply forwards all command-line arguments to the native binary
-and propagates its exit code.
+- `cli.js` — a minimal Node.js launcher that runs the native binary.
+  Contains no Xerv logic; Rust is the sole implementation.
+- `bin/xerv` — the native Xerv binary (Linux x86_64).
 
 ## Supported Platforms
 
 - **Linux x86_64** — current focus
 
-Future releases will add per-platform npm packages for macOS and Windows.
-
-## Source Code
-
-The source code is available at:
-**https://github.com/XonofiliusPL/Xerv-Core**
+Future releases will add macOS and Windows via separate platform-specific packages.
 
 ## License
 
-Xerv Core is intended to be released under the **MIT OR Apache-2.0**
-dual license.
+MIT OR Apache-2.0
