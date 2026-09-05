@@ -1,6 +1,6 @@
 {
-  "name": "xerv",
-  "version": "0.1.0",
+  "name": "@xonofilius/xerv",
+  "version": "0.2.1",
   "description": "Xerv Core — modular infrastructure for systems, agents, and automation. Native binary npm wrapper.",
   "readme": "README.npm.md",
   "bin": {
@@ -10,7 +10,7 @@
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/XonofiliusPL/Xerv-Core.git"
+    "url": "git+https://github.com/XonofiliusPL/Xerv-Core.git"
   },
   "keywords": [
     "xerv",

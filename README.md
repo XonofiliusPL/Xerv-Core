@@ -1,6 +1,6 @@
 # Xerv
 
-[![npm](https://img.shields.io/npm/v/xerv.svg)](https://www.npmjs.com/package/xerv)
+[![npm](https://img.shields.io/npm/v/@xonofilius/xerv.svg)](https://www.npmjs.com/package/@xonofilius/xerv)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
 
 **Your unified terminal — monitor, navigate, and automate from one place.**
@@ -154,7 +154,7 @@ into clear, purposeful sections:
 Xerv is installed like any Node package — in your user space, no `sudo` needed:
 
 ```bash
-npm install -g xerv
+npm install -g @xonofilius/xerv
 ```
 
 Requires Node.js 18+ and a Linux or macOS system.
@@ -207,7 +207,7 @@ with automatic rollback on failure.
 Remove Xerv completely:
 
 ```bash
-npm uninstall -g xerv
+npm uninstall -g @xonofilius/xerv
 ```
 
 This removes the binary and all associated files.
@@ -244,7 +244,7 @@ Interested in helping shape the addon API? [Open an issue](https://github.com/Xo
 | Agent Workspace with state model and workspace tree | ✅ Done |
 | Terminal UI — navigation, layout, visual identity | ✅ Done |
 | Update system — GitHub releases, checksum, atomic install | ✅ Done |
-| npm distribution — `npm install -g xerv` | ✅ Done |
+| npm distribution — `npm install -g @xonofilius/xerv` | ✅ Done |
 | Process and system monitoring views | 🔶 Planned |
 | Log streaming and data integration in TUI | 🔷 Future |
 | Addons / plugins / modules system | 🔷 Future |
@@ -267,7 +267,7 @@ architecture, and behavior will evolve as Xerv grows.
 ## Links
 
 - **GitHub**: [XonofiliusPL/Xerv-Core](https://github.com/XonofiliusPL/Xerv-Core)
-- **npm**: [xerv](https://www.npmjs.com/package/xerv)
+- **npm**: [@xonofilius/xerv](https://www.npmjs.com/package/@xonofilius/xerv)
 - **Report an issue**: [GitHub Issues](https://github.com/XonofiliusPL/Xerv-Core/issues)
 - **View changes**: [Commit history](https://github.com/XonofiliusPL/Xerv-Core/commits/main)
 

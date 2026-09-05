@@ -1,6 +1,6 @@
-# xerv (npm package)
+# @xonofilius/xerv
 
-[![npm](https://img.shields.io/npm/v/xerv.svg)](https://www.npmjs.com/package/xerv)
+[![npm](https://img.shields.io/npm/v/@xonofilius/xerv.svg)](https://www.npmjs.com/package/@xonofilius/xerv)
 
 **Your unified terminal — monitor, navigate, and automate from one place.**
 
@@ -14,7 +14,7 @@ For the full project documentation, see the
 ## Install
 
 ```bash
-npm install -g xerv
+npm install -g @xonofilius/xerv
 ```
 
 No `sudo` required. Installs to your user directory.
@@ -23,8 +23,15 @@ Requires Node.js 18+ on Linux.
 
 ## Usage
 
+After installation, run Xerv with:
+
 ```bash
-xerv              # Launch the Xerv interactive terminal interface
+xerv
+```
+
+Other available commands:
+
+```bash
 xerv help         # Show available commands
 xerv version      # Print the installed Xerv version
 xerv update       # Download and install the latest release
@@ -33,7 +40,7 @@ xerv update       # Download and install the latest release
 ## Uninstall
 
 ```bash
-npm uninstall -g xerv
+npm uninstall -g @xonofilius/xerv
 ```
 
 ## What's Inside the Package
