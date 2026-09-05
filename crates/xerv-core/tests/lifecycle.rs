@@ -13,7 +13,7 @@ fn new_then_shutdown_writes_state_file() {
 
     let core = XervCore::new(cfg, state_path.clone()).unwrap();
     assert_eq!(core.state().boot_count, 1);
-    assert_eq!(core.api_version().minor, 1);
+    assert_eq!(core.api_version().minor, 2);
 
     core.shutdown().unwrap();
     assert!(state_path.exists());

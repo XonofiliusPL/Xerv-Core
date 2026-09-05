@@ -1,6 +1,6 @@
 [package]
 name = "xerv-core"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.74"
 description = "Minimal Xerv foundation: errors, version, config, logging, state, lifecycle"

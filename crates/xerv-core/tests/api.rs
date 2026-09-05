@@ -8,8 +8,8 @@ fn api_version_constants_match() {
 }
 
 #[test]
-fn test_version_is_zero_one_zero() {
+fn test_version_is_zero_two_one() {
     assert_eq!(api_version().major, 0);
-    assert_eq!(api_version().minor, 1);
-    assert_eq!(api_version().patch, 0);
+    assert_eq!(api_version().minor, 2);
+    assert_eq!(api_version().patch, 1);
 }
