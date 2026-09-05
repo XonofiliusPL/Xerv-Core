@@ -6,7 +6,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use crate::app::{App, Area, Panel, UiAreas, ACTIVE_NAV, COMMANDS, COMMAND_COUNT, NAV_ITEMS};
+use crate::app::{
+    AgentStatus, App, Area, Panel, UiAreas, WorkspaceModel, WorktreeKind, COMMANDS, COMMAND_COUNT,
+    SIDEBAR_COUNT, SIDEBAR_ITEMS,
+};
 
 const HEADER_HEIGHT: u16 = 4;
 const FOOTER_HEIGHT: u16 = 1;
@@ -70,18 +73,6 @@ fn short_path(path: &std::path::Path, max_segments: usize) -> String {
     }
     let kept: Vec<_> = parts[parts.len() - max_segments..].to_vec();
     format!("…/{}", kept.join("/"))
-}
-
-/// Człowiekowo-czytelna data z unixa (lokalna, bez zewnętrznych crate'ów).
-fn unix_to_human(unix: u64) -> String {
-    // Bez chrono — liczymy dzień/godzinę względem epoki w formacie skróconym:
-    // dni od epoki + HH:MM. To nie jest pełna data kalendarzowa, ale czytelne
-    // "D+NNNN HH:MM" (dni od startu systemu uniksowego) — wystarcza do debug.
-    let days = unix / 86_400;
-    let rem = unix % 86_400;
-    let hh = rem / 3600;
-    let mm = (rem % 3600) / 60;
-    format!("D+{days} {hh:02}:{mm:02}")
 }
 
 /// Człowiekowo-czytelny uptime.
@@ -237,28 +228,48 @@ fn draw_main(f: &mut Frame, area: Rect, app: &App) -> (Rect, Vec<(&'static str, 
     (chunks[0], cards)
 }
 
-/// Sidebar — nawigacja Xerv. Struktura wg NAV_ITEMS; aktywny ekran (Dashboard)
-/// wyróżniony cyan + wskaźnik ▎; kursor nawigacji (↑/↓) podświetla wiersz.
-/// Sekcje przyszłe: muted (nieaktywne do momentu implementacji).
-fn draw_side(f: &mut Frame, area: Rect, app: &App) {
-    // Nagłówek sekcji + pozycje: 1 wiersz nagłówka grupy między sekcjami.
-    // Layout: [ header "NAVIGATION" ] [ items... ] [ spacer ] [ footer-hint ]
-    // Dzielimy WNĘTRZE ramki (bez borderów) — nagłówek nie nadpisze ramki.
-    let inner = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
-    };
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),                      // nagłówek sekcji
-            Constraint::Length(NAV_ITEMS.len() as u16), // pozycje
-            Constraint::Min(1),                         // wolna przestrzeń
-        ])
-        .split(inner);
+const ITEM_MARKER_ACTIVE: &str = "\u{25CF} "; // ● : aktywny ekran (cyan)
+const ITEM_MARKER_CURSOR: &str = "\u{258E} "; // ▎ : kursor nawigacji (white) — gdy active_panel == Side
+const ITEM_MARKER_HOVER: &str = "\u{25CB} "; // ○ : hover myszy (magenta, niezmienia aktywnego)
 
+/// Pozycja sidebaru: imię + styl + marker — renderowana z pojedynczego źródła.
+struct SidebarItem {
+    name: &'static str,
+    style: Style,
+    marker: &'static str,
+}
+
+/// Buduje listę pozycji na podstawie stanu aplikacji (active + cursor + hover).
+fn sidebar_items(app: &App) -> Vec<SidebarItem> {
+    SIDEBAR_ITEMS
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let is_active = app.side_active == i;
+            let is_cursor = app.side_cursor == i && app.active_panel == Panel::Side;
+            let is_hover = app.side_hover == Some(i);
+            let (marker, style) = if is_active {
+                (ITEM_MARKER_ACTIVE, accent_primary_bold())
+            } else if is_cursor {
+                (ITEM_MARKER_CURSOR, value_style())
+            } else if is_hover {
+                (ITEM_MARKER_HOVER, accent_secondary())
+            } else {
+                ("  ", muted_style())
+            };
+            SidebarItem {
+                name,
+                style,
+                marker,
+            }
+        })
+        .collect()
+}
+
+/// Sidebar — nawigacja Xerv. Single source: SIDEBAR_ITEMS.
+/// Aktywna pozycja: cyan (●). Kursor nawigacji (↑/↓/klik): white (▎).
+/// Hover myszy: magenta (○) — nie zmienia aktywnej pozycji.
+fn draw_side(f: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" xerv ")
@@ -269,44 +280,35 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
         });
     f.render_widget(block, area);
 
-    // Nagłówek sekcji — muted small-caps styl (małe litery, spacje).
+    // Wewnętrzna przestrzeń (za borderami):
+    // x+1, y+1, width-2, height-2.
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // nagłówek NAVIGATION
+            Constraint::Length(SIDEBAR_COUNT as u16),
+            Constraint::Min(1), // wolna przestrzeń
+        ])
+        .split(inner);
+
+    // Nagłówek sekcji.
     let head = Line::from(Span::styled(" NAVIGATION", muted_style()));
     f.render_widget(Paragraph::new(head), rows[0]);
 
-    // Pozycje nawigacji.
-    for (i, (name, implemented)) in NAV_ITEMS.iter().enumerate() {
-        let is_cursor = app.nav_cursor == i && app.active_panel == Panel::Side;
-        let is_active = i == ACTIVE_NAV;
+    // Każda pozycja renderowana z single source (sidebar_items).
+    let items = sidebar_items(app);
+    for (i, item) in items.into_iter().enumerate() {
         let y = rows[1].y + i as u16;
-
-        // Wiersz: wskaźnik + nazwa. Active: cyan bold; cursor: reversed-lite
-        // (wskaźnik ▎ w cyan); przyszłe: muted.
-        let (marker, name_style): (Span, Span) = if is_active {
-            (
-                Span::styled("▎ ", accent_primary()),
-                Span::styled((*name).to_string(), accent_primary_bold()),
-            )
-        } else if is_cursor {
-            (
-                Span::styled("▎ ", muted_style()),
-                Span::styled((*name).to_string(), value_style()),
-            )
-        } else if *implemented {
-            (
-                Span::raw("  "),
-                Span::styled((*name).to_string(), value_style()),
-            )
-        } else {
-            (
-                Span::raw("  "),
-                Span::styled((*name).to_string(), muted_style()),
-            )
-        };
-
-        let line = Line::from(vec![marker, name_style]);
-        // Tło wiersza kursora — subtelne (bez pełnej inwersji): rysujemy
-        // Paragraph z wierszem; ratatui nie ma row-bg, więc dla kursora
-        // używamy tylko wskaźnika — czytelne i zgodne z minimalizmem.
+        let line = Line::from(vec![
+            Span::raw(item.marker).style(item.style),
+            Span::styled(item.name.to_string(), item.style),
+        ]);
         let rect = Rect {
             x: area.x + 1,
             y,
@@ -318,16 +320,290 @@ fn draw_side(f: &mut Frame, area: Rect, app: &App) {
 }
 
 // ---- dashboard -----------------------------------------------------------------
+//
+// Główny panel Dashboardu = Agent Workspace (Punkt 3).
+//
+// Layout pionowy:
+//   1. Status strip (1 wiersz) — zachowany z poprzedniej wersji.
+//   2. Workspace grid: dwie kolumny — Agent info (aktywny) | Workspace tree.
+//   3. Terminal placeholder — wyraźne miejsce na przyszły terminal.
+//   4. Last activity — lista demonstracyjnych wpisów.
+//
+// Karty w gridzie oraz terminal/activity mają nagłówek z ikoną.
+// Karty aktywne (agent) mają ramkę cyan; inne muted — zgodnie z DESIGN.md.
 
-/// Gęsty dashboard: pasek statusu + karty. Zwraca obszary kart.
+const TERMINAL_PLACEHOLDER_HEIGHT: u16 = 6;
+const ACTIVITY_MAX_ROWS_SMALL: usize = 3; // demo: 3 wpisy
+
+/// Agent Workspace dashboard: status strip + workspace grid + terminal + activity.
+/// Zwraca obszary kart (dla hit-testów w przyszłości).
 fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(1)])
+        .constraints([
+            Constraint::Length(1),                               // status strip
+            Constraint::Min(3), // workspace grid (agent + workspace tree)
+            Constraint::Length(TERMINAL_PLACEHOLDER_HEIGHT + 2), // terminal
+            Constraint::Min(1), // last activity
+        ])
         .split(area);
 
     draw_status_strip(f, chunks[0], app);
-    draw_cards(f, chunks[1], app)
+    let cards = draw_workspace_grid(f, chunks[1], app);
+    draw_terminal_placeholder(f, chunks[2]);
+    draw_last_activity(f, chunks[3], app);
+    cards
+}
+
+/// Workspace grid: lewa kolumna = Agent info, prawa = Workspace tree.
+/// Na wąskich terminalach (< 80) układa karty pionowo (1 kolumna).
+fn draw_workspace_grid(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
+    let mut areas = Vec::new();
+    let ws = &app.workspace;
+
+    let card_chunks = if area.width >= 80 {
+        Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(8), Constraint::Min(1)])
+            .split(area)
+    };
+
+    draw_agent_card(f, card_chunks[0], ws, app, &mut areas);
+    draw_workspace_tree_card(f, card_chunks[1], ws, &mut areas);
+    areas
+}
+
+/// Karta aktywnego agenta — pełne informacje: nazwa, status, model, uptime, task.
+fn draw_agent_card(
+    f: &mut Frame,
+    area: Rect,
+    ws: &WorkspaceModel,
+    app: &App,
+    areas: &mut Vec<(&'static str, Area)>,
+) {
+    let agent = &ws.agents[ws.active_agent.min(ws.agents.len().saturating_sub(1))];
+    let is_active = app.active_panel == Panel::Main;
+
+    let lines = vec![
+        kv_accent("agent", &agent.name),
+        kv("model", &agent.model),
+        status_kv_agent(agent.status),
+        kv("uptime", &agent.uptime.format()),
+        separator_line(),
+        kv("task", &agent.current_task),
+    ];
+    render_card_named(f, area, "agent", lines, is_active, false, areas);
+}
+
+/// Karta drzewa workspace — hierarchia: Project → Worktree → Session → Agent.
+fn draw_workspace_tree_card(
+    f: &mut Frame,
+    area: Rect,
+    ws: &WorkspaceModel,
+    areas: &mut Vec<(&'static str, Area)>,
+) {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+
+    kv_root(&mut lines, "workspace", &ws.workspace_name);
+
+    for proj in &ws.projects {
+        kv_indent(&mut lines, 1, "project", &proj.name);
+        for wt in &proj.worktrees {
+            let kind_str = match wt.kind {
+                WorktreeKind::Current => "current",
+                WorktreeKind::Branch => "branch",
+                WorktreeKind::Detached => "detached",
+            };
+            let marker = if wt.active { "● " } else { "  " };
+            kv_indent_marker(&mut lines, 2, kind_str, &wt.path, marker);
+        }
+    }
+
+    separator_line();
+    for sess in &ws.sessions {
+        let marker = if sess.active { "● " } else { "  " };
+        kv_indent_marker(&mut lines, 1, "session", &sess.name, marker);
+    }
+
+    separator_line();
+    for (i, agent) in ws.agents.iter().enumerate() {
+        let marker = if i == ws.active_agent { "● " } else { "  " };
+        kv_indent_marker(&mut lines, 1, "agent", &agent.name, marker);
+    }
+
+    render_card_named(f, area, "workspace", lines, false, false, areas);
+}
+
+/// Placeholder terminalu — miejsce na przyszły terminal.
+/// Nie uruchamia shell ani procesu. Wyraźny obszar z nagłówkiem i ikoną.
+fn draw_terminal_placeholder(f: &mut Frame, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" terminal ")
+        .title_style(muted_style().add_modifier(Modifier::BOLD))
+        .border_style(muted_style());
+
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "  $ shell — not initialized (Point 3)",
+            muted_style(),
+        )),
+        Line::from(Span::styled(
+            "  terminal placeholder — will host a real pty in a future point",
+            muted_style(),
+        )),
+        Line::from(Span::raw("")),
+        Line::from(Span::styled(
+            "  [ press `e` to enter (future) | output will appear here ]",
+            muted_style(),
+        )),
+    ];
+
+    f.render_widget(
+        Paragraph::new(lines).block(block),
+        Rect {
+            x: inner.x,
+            y: inner.y,
+            width: inner.width,
+            height: inner.height.saturating_sub(0),
+        },
+    );
+
+    // Upewnijmy się, że cały placeholder mieści się w viewport.
+    let _ = Rect {
+        x: area.x,
+        y: area.y,
+        width: area.width,
+        height: area.height,
+    };
+}
+
+/// Sekcja "last activity" — demonstracyjne wpisy z timestampem.
+fn draw_last_activity(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" last activity ")
+        .title_style(accent_secondary().add_modifier(Modifier::BOLD))
+        .border_style(muted_style());
+
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+
+    if app.activity.is_empty() {
+        let lines = vec![Line::from(Span::styled(
+            "  (no activity yet)",
+            muted_style(),
+        ))];
+        f.render_widget(Paragraph::new(lines).block(block), inner);
+        return;
+    }
+
+    // Ograniczamy do wystarczającej liczby wierszy na małym terminalu.
+    let max_rows = (inner.height as usize)
+        .saturating_sub(2)
+        .min(ACTIVITY_MAX_ROWS_SMALL);
+    let entries: Vec<_> = app.activity.iter().take(max_rows).collect();
+
+    let lines: Vec<Line<'static>> = entries
+        .iter()
+        .map(|e| {
+            Line::from(vec![
+                Span::styled("  ", muted_style()),
+                Span::styled(e.timestamp.clone(), muted_style()),
+                Span::styled("  │  ", muted_style()),
+                Span::styled(e.content.clone(), value_style()),
+            ])
+        })
+        .collect();
+
+    let mut lines = lines;
+    // Wyrównaj do dostępnej wysokości (puste spacjery na dole).
+    while lines.len() < inner.height as usize {
+        lines.push(Line::from(Span::raw("")));
+    }
+
+    f.render_widget(Paragraph::new(lines).block(block), inner);
+}
+
+/// Status agenta z semantycznym kolorem (green=działa, yellow=idle, red=error).
+fn status_kv_agent(status: AgentStatus) -> Line<'static> {
+    let (color, text) = match status {
+        AgentStatus::Running => (Color::Green, "running"),
+        AgentStatus::Idle => (Color::Yellow, "idle"),
+        AgentStatus::Done => (Color::Green, "done"),
+        AgentStatus::Error => (Color::Red, "error"),
+    };
+    let marker = status.marker();
+    Line::from(vec![
+        Span::raw("  "),
+        Span::styled(format!("{:<12}", "status"), muted_style()),
+        Span::styled(
+            format!("{marker} {text}"),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+    ])
+}
+
+/// kv dla poziomu 0 (root workspace) — wartość w accent_secondary.
+fn kv_root(lines: &mut Vec<Line<'static>>, label: &str, value: &str) {
+    lines.push(kv_accent(label, value));
+}
+
+/// kv z wcięciem (dla projektów/worktreeów/sessions/agents w drzewie).
+fn kv_indent(lines: &mut Vec<Line<'static>>, depth: usize, label: &str, value: &str) {
+    lines.push(Line::from(vec![
+        Span::raw("  ".repeat(depth + 1)),
+        Span::styled(format!("{label:<10}"), muted_style()),
+        Span::styled(value.to_string(), value_style()),
+    ]));
+}
+
+/// kv z wcięciem + markerem (● aktywny / spacja nieaktywny).
+fn kv_indent_marker(
+    lines: &mut Vec<Line<'static>>,
+    depth: usize,
+    label: &str,
+    value: &str,
+    marker: &str,
+) {
+    lines.push(Line::from(vec![
+        Span::raw("  ".repeat(depth + 1)),
+        Span::styled(marker.to_string(), value_style()),
+        Span::styled(format!("{label:<10}"), muted_style()),
+        Span::styled(value.to_string(), value_style()),
+    ]));
+}
+
+/// Renderuje kartę z jawnym aktywnym/hover stanem i zapisuje obszar.
+fn render_card_named(
+    f: &mut Frame,
+    area: Rect,
+    title: &'static str,
+    lines: Vec<Line<'static>>,
+    active: bool,
+    hovered: bool,
+    areas: &mut Vec<(&'static str, Area)>,
+) {
+    let block = card_block(title, active, hovered);
+    let p = Paragraph::new(lines).block(block);
+    f.render_widget(p, area);
+    areas.push((title, to_area(area)));
 }
 
 /// Jednolinijsowy pasek statusu: status semantyczny, wartości neutralne,
@@ -373,75 +649,9 @@ fn draw_status_strip(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(Paragraph::new(Line::from(line_spans)), area);
 }
 
-/// Grid kart: lewa kolumna (system/storage), prawa (runtime + state).
-fn draw_cards(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
-    let mut areas = Vec::new();
-
-    // Dwie kolumny; na wąskim terminalu jedna (vertical stack).
-    let two_cols = area.width >= 80;
-    let card_chunks = if two_cols {
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area)
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area)
-    };
-
-    let cfg = app.core.config();
-    let st = app.core.state();
-    let api = app.core.api_version();
-    let shutdown = app.core.is_shutdown();
-
-    // Karta 1: System — grupa "identity" + separator + grupa "storage/log".
-    // api version i schema = "odpowiedzi" → secondary accent; reszta neutralna.
-    let sys_lines = vec![
-        kv_accent(
-            "api version",
-            &format!("{}.{}.{}", api.major, api.minor, api.patch),
-        ),
-        kv_accent("schema", &format!("v{}", st.schema_version)),
-        separator_line(),
-        kv("data dir", &short_path(&cfg.data_dir, 2)),
-        kv("state file", &cfg.state_filename),
-        kv("log level", &cfg.log_level),
-    ];
-    render_card(f, card_chunks[0], "system", sys_lines, &mut areas);
-
-    // Karta 2: Runtime — lifecycle; szczegóły, których nie ma w stripie.
-    let run_lines = vec![
-        kv("boot count", &st.boot_count.to_string()),
-        kv("first boot", &unix_to_human(st.started_at_unix)),
-        separator_line(),
-        status_kv(shutdown),
-    ];
-    render_card(f, card_chunks[1], "runtime", run_lines, &mut areas);
-
-    areas
-}
-
 /// Cienki separator wewnątrz karty (dim).
 fn separator_line() -> Line<'static> {
     Line::from(Span::styled("  ························", muted_style()))
-}
-
-/// Wiersz statusu z semantycznym kolorem (green/red).
-fn status_kv(shutdown: bool) -> Line<'static> {
-    Line::from(vec![
-        Span::raw("  "),
-        Span::styled(format!("{:<12}", "status"), muted_style()),
-        if shutdown {
-            Span::styled(
-                "● SHUTDOWN",
-                status_style(false).add_modifier(Modifier::BOLD),
-            )
-        } else {
-            Span::styled("● READY", status_style(true).add_modifier(Modifier::BOLD))
-        },
-    ])
 }
 
 /// Para etykieta→wartość. Etykieta muted, wartość neutralna (White).
@@ -461,20 +671,6 @@ fn kv_accent<'a>(label: &str, value: &str) -> Line<'a> {
         Span::styled(format!("{label:<12}"), muted_style()),
         Span::styled(value.to_string(), accent_secondary()),
     ])
-}
-
-/// Renderuje kartę i zapisuje jej obszar.
-fn render_card(
-    f: &mut Frame,
-    area: Rect,
-    title: &'static str,
-    lines: Vec<Line<'static>>,
-    areas: &mut Vec<(&'static str, Area)>,
-) {
-    let block = card_block(title, false, false);
-    let p = Paragraph::new(lines).block(block);
-    f.render_widget(p, area);
-    areas.push((title, to_area(area)));
 }
 
 // ---- command bar ----------------------------------------------------------------

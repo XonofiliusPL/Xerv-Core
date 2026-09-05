@@ -16,8 +16,12 @@ pub enum Event {
     NavDown,
     /// Kursor nawigacji sidebaru w górę.
     NavUp,
-    /// Potwierdzenie pozycji nawigacji (Enter gdy fokus na Side).
-    NavSelect,
+    /// Potwierdzenie pozycji nawigacji (Enter/Space gdy fokus na Side).
+    NavActivate,
+    /// Pierwsza pozycja (Home).
+    NavHome,
+    /// Ostatnia pozycja (End).
+    NavEnd,
     /// Kliknięcie myszą na współrzędnej (col, row) — Panel.
     ClickPanel(u16, u16),
     /// Kliknięcie myszą na współrzędnej (col, row) — Command bar.
@@ -44,11 +48,13 @@ pub fn read_event() -> std::io::Result<Event> {
                     KeyCode::Char('r') => Event::Refresh,
                     KeyCode::Right => Event::NextCommand,
                     KeyCode::Left => Event::PrevCommand,
-                    KeyCode::Enter => Event::SelectCommand,
-                    // ↑/↓: nawigacja sidebaru; Enter potwierdza (kolejność
-                    // dopasowania ważna — Enter wyżej niż NavSelect).
+                    KeyCode::Enter => Event::NavActivate,
+                    KeyCode::Char(' ') => Event::NavActivate,
+                    // ↑/↓: nawigacja sidebaru; Enter/Space potwierdza.
                     KeyCode::Down => Event::NavDown,
                     KeyCode::Up => Event::NavUp,
+                    KeyCode::Home => Event::NavHome,
+                    KeyCode::End => Event::NavEnd,
                     _ => continue,
                 });
             }
