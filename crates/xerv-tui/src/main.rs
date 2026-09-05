@@ -20,7 +20,7 @@ fn main() -> io::Result<()> {
     if let Some(first) = iter.next() {
         let first = first.as_str();
         match first {
-            "-h" | "--help" => {
+            "-h" | "--help" | "help" => {
                 print_usage();
                 return Ok(());
             }
