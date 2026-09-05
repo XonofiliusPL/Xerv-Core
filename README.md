@@ -131,11 +131,18 @@ tested.
 ### Installation
 
 ```bash
-xerv install
+npm install -g xerv
 ```
 
-This runs the interactive installer, which sets up the binary, symlink,
-and configuration directory in user-space.
+This installs the `xerv` binary globally via npm, which downloads and
+sets up the native Rust binary in user-space (no `sudo` required).
+
+Alternatively, you can build from source:
+
+```bash
+cargo build --release
+cp target/release/xerv ~/.local/bin/
+```
 
 ### Running Xerv
 
@@ -184,7 +191,13 @@ Xerv-Core/
 │           ├── lib.rs      # Module declarations
 │           └── tests/      # TUI tests (app, dashboard, header, CLI dispatch)
 ├── .gitignore
-└── .claude/                # Claude Code settings (local, not committed)
+├── .claude/                # Claude Code settings (local, not committed)
+└── npm-package/            # npm distribution wrapper (native binary)
+    ├── package.json        # npm package manifest
+    ├── cli.js              # Node.js wrapper — spawns native binary
+    ├── README.npm.md       # npm-specific documentation
+    └── bin/                # Native Rust binary
+        └── xerv            # Pre-built for Linux x86_64
 ```
 
 ## Development
