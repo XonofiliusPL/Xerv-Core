@@ -65,3 +65,72 @@ fn header_fits_narrow_terminal() {
     // Wąski terminal — header nie panicuje.
     let _ = render(&mut app, 30, 20);
 }
+
+// ---- footer hint ----------------------------------------------------------------
+
+/// Zwraca style komórki bufora w (x, y) — pozwala testować kolory, nie tylko tekst.
+fn cell_styles(app: &mut App, width: u16, height: u16) -> Vec<Vec<ratatui::style::Style>> {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, app)).unwrap();
+    let buf = terminal.backend().buffer().clone();
+    (0..buf.area.height)
+        .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].style()).collect())
+        .collect()
+}
+
+/// Pozycja (x,y) pierwszego znaku `needle` w `lines` (char-index).
+fn find_cell(lines: &[String], needle: &str) -> Option<(usize, usize)> {
+    for (y, l) in lines.iter().enumerate() {
+        if let Some(xb) = l.find(needle) {
+            return Some((y, l[..xb].chars().count()));
+        }
+    }
+    None
+}
+
+#[test]
+fn footer_keys_are_cyan_accents() {
+    let mut app = make_app();
+    let backend = TestBackend::new(120, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
+    let s = terminal.backend().to_string();
+    let lines: Vec<String> = s.lines().map(|l| l.trim_matches('"').to_string()).collect();
+
+    let styles = cell_styles(&mut app, 120, 24);
+    for key in ["←", "↑", "→", "↓", "Enter", "BackSpace"] {
+        if let Some((y, x)) = find_cell(&lines, key) {
+            let st = styles[y][x];
+            assert_eq!(
+                st.fg,
+                Some(ratatui::style::Color::Cyan),
+                "footer key '{key}' must be Cyan (accent), got {:?}",
+                st.fg
+            );
+        }
+    }
+}
+
+#[test]
+fn footer_descriptions_are_white() {
+    let mut app = make_app();
+    let backend = TestBackend::new(120, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
+    let s = terminal.backend().to_string();
+    let lines: Vec<String> = s.lines().map(|l| l.trim_matches('"').to_string()).collect();
+    let styles = cell_styles(&mut app, 120, 24);
+
+    for desc in ["Nav", "Confirm", "Return"] {
+        if let Some((y, x)) = find_cell(&lines, desc) {
+            let st = styles[y][x];
+            assert_eq!(
+                st.fg,
+                Some(ratatui::style::Color::White),
+                "footer description '{desc}' must be White (value), got {:?}",
+                st.fg
+            );
+        }
+    }
+}

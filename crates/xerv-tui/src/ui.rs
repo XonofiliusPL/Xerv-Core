@@ -74,14 +74,19 @@ fn draw_header(f: &mut Frame, area: Rect) {
 }
 
 /// Footer — wyłącznie hint skrótów, nic więcej.
+/// Klawisze = accent_primary (cyan), opisy (Nav/Confirm/Return) = value
+/// (white) — zachowane odstępy i układ.
 fn draw_footer(f: &mut Frame, area: Rect) {
     let line = Line::from(vec![
         Span::raw(" "),
-        Span::styled("← → ↑ ↓  Nav", accent_primary()),
+        Span::styled("← → ↑ ↓", accent_primary()),
+        Span::styled("  Nav", value_style()),
         Span::raw("    "),
-        Span::styled("Enter  Confirm", accent_primary()),
+        Span::styled("Enter", accent_primary()),
+        Span::styled("  Confirm", value_style()),
         Span::raw("    "),
-        Span::styled("BackSpace  Return", accent_primary()),
+        Span::styled("BackSpace", accent_primary()),
+        Span::styled("  Return", value_style()),
     ]);
     f.render_widget(Paragraph::new(line), area);
 }
