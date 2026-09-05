@@ -137,10 +137,10 @@ fn sidebar_enter_sets_active_to_cursor() {
 fn sidebar_space_sets_active_to_cursor() {
     let mut app = make_app();
     app.handle_event(Event::NavDown);
-    app.handle_event(Event::NavDown);
-    assert_eq!(app.side_cursor, 2); // Help
+    assert_eq!(app.side_cursor, 1); // Settings
     app.handle_event(Event::NavActivate);
-    assert_eq!(app.side_active, 2);
+    assert_eq!(app.side_active, 1);
+    assert_eq!(app.active_panel, Panel::Side);
 }
 
 #[test]
@@ -149,14 +149,14 @@ fn sidebar_click_sets_active_and_cursor() {
     render(&mut app, 120, 20);
 
     let side_area = app.side_area.unwrap();
-    // Klik w pozycję o indeksie 2 (Help).
-    let item_y = side_area.y + 1 + 1 + 2; // border + " NAVIGATION" + offset
+    // Klik w pozycję o indeksie 1 (Settings).
+    let item_y = side_area.y + 1 + 1 + 1; // border + " NAVIGATION" + offset
     let item_x = side_area.x + 1;
     app.handle_event(Event::Click(item_x, item_y));
 
-    assert_eq!(app.side_active, 2);
-    assert_eq!(app.side_cursor, 2);
-    assert_eq!(app.side_hover, Some(2));
+    assert_eq!(app.side_active, 1);
+    assert_eq!(app.side_cursor, 1);
+    assert_eq!(app.side_hover, Some(1));
     assert_eq!(app.active_panel, Panel::Side);
 }
 
@@ -286,4 +286,26 @@ fn sidebar_render_cursor_hidden_when_panel_is_main() {
         !s.contains("\u{258E} Settings"),
         "cursor should be hidden when panel is Main: {s}"
     );
+}
+
+#[test]
+fn sidebar_click_on_help_opens_help_panel() {
+    let mut app = make_app();
+    render(&mut app, 120, 20);
+    let side_area = app.side_area.unwrap();
+    // Klik w pozycję 2 (Help).
+    let item_y = side_area.y + 1 + 1 + 2;
+    app.handle_event(Event::Click(side_area.x + 1, item_y));
+    assert!(app.show_help, "clicking Help should open help");
+    assert_eq!(app.active_panel, Panel::Main);
+    // Po powrocie z Help, side_active nie musi być 2 (Help nie zmienia active).
+}
+
+#[test]
+fn sidebar_enter_on_help_opens_help_panel() {
+    let mut app = make_app();
+    app.side_cursor = 2; // Help
+    app.handle_event(Event::NavActivate);
+    assert!(app.show_help);
+    assert_eq!(app.active_panel, Panel::Main);
 }

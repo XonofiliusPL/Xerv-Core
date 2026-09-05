@@ -482,8 +482,106 @@ fn kv_pair(label: &str, value: &str, value_style: Style) -> Line<'static> {
     ])
 }
 
-/// Dashboard Xerv Core — rysuje panel zależny od `core_panel`.
-/// Zwraca obszary kart (dla hit-testów mysą).
+/// Statyczny panel Help — dostępny z Sidebaru (Help). Prezentuje skróty
+/// klawiaturowe i opis działania TUI. Nie jest interactive — to jedynie
+/// odczyt informacji.
+fn draw_help(f: &mut Frame, area: Rect, app: &App, areas: &mut Vec<(&'static str, Area)>) {
+    let is_hovered = app.dashboard_hover == Some("help");
+    let block = card_block("help", app.active_panel == Panel::Main, is_hovered);
+
+    // Treść Help: skróty + opis — statyczna, niezależna od Core.
+    let lines: Vec<Line<'static>> = vec![
+        Line::from(Span::styled(
+            " Navigation",
+            value_style().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("Tab", accent_primary()),
+            Span::raw("  przełącz panel (Side ↔ Main)"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("↑↓", accent_primary()),
+            Span::raw("  porusz kursor przez nawigację"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("Enter", accent_primary()),
+            Span::raw("  aktywuj / przejdź dalej"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("←→", accent_primary()),
+            Span::raw("  wybierz akcję w command barze"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("Home/End", accent_primary()),
+            Span::raw("  przejdź na początek/koniec listy"),
+        ]),
+        Line::from(Span::raw("")),
+        Line::from(Span::styled(
+            " Panels",
+            value_style().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw("install"),
+            Span::raw("  — przygotowanie Core (core init, config ready)"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw("onboarding "),
+            Span::raw("— konfiguracja Core (config/state ready)"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw("main"),
+            Span::raw("  — pełny stan Core po zakończeniu przygotowania"),
+        ]),
+        Line::from(Span::raw("")),
+        Line::from(Span::styled(
+            " Mouse",
+            value_style().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw("hover"),
+            Span::raw("  — wizualny highlight (magenta), nie zmienia aktywnego"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::raw("click"),
+            Span::raw("  — aktywacja elementu (sidebar / command bar / karta)"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("Exit", accent_primary()),
+            Span::raw("  — wyjdź z Xerv (klik lub Enter)"),
+        ]),
+    ];
+
+    // Scrollujemy, jeśli treść nie mieści się — tu statyczna, więc po prostu
+    // renderujemy do bloku; puste linie wyrównują do wysokości.
+    let inner_h = area.height.saturating_sub(2) as usize;
+    let mut body = lines;
+    while body.len() < inner_h {
+        body.push(Line::from(Span::raw("")));
+    }
+
+    f.render_widget(
+        Paragraph::new(body).block(block),
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: area.height,
+        },
+    );
+    areas.push(("help", to_area(area)));
+}
+
 fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Area)> {
     // Układ pionowy: status strip (1) + treść (Min).
     // Treść = Install (progres), Onboarding (progres), Main (core card).
@@ -499,23 +597,27 @@ fn draw_dashboard(f: &mut Frame, area: Rect, app: &App) -> Vec<(&'static str, Ar
 
     let mut areas = Vec::new();
     let content = chunks[1];
-    match app.core_panel {
-        CorePanel::Install => {
-            draw_progress_card(f, content, "install", &INSTALL_STEPS, None, app, &mut areas);
-        }
-        CorePanel::Onboarding => {
-            draw_progress_card(
-                f,
-                content,
-                "onboarding",
-                &ONBOARDING_STEPS,
-                None,
-                app,
-                &mut areas,
-            );
-        }
-        CorePanel::Main => {
-            draw_core_card(f, content, app, &mut areas);
+    if app.show_help {
+        draw_help(f, content, app, &mut areas);
+    } else {
+        match app.core_panel {
+            CorePanel::Install => {
+                draw_progress_card(f, content, "install", &INSTALL_STEPS, None, app, &mut areas);
+            }
+            CorePanel::Onboarding => {
+                draw_progress_card(
+                    f,
+                    content,
+                    "onboarding",
+                    &ONBOARDING_STEPS,
+                    None,
+                    app,
+                    &mut areas,
+                );
+            }
+            CorePanel::Main => {
+                draw_core_card(f, content, app, &mut areas);
+            }
         }
     }
     areas

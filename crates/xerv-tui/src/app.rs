@@ -201,6 +201,9 @@ pub struct App {
     pub should_quit: bool,
     /// Focus między sidebar (Side) a panelem treści (Main).
     pub active_panel: Panel,
+    /// Czy aktywnie wyświetlany jest ekran Help (Sidebar → Help).
+    /// Help jest statycznym panelem, nie CorePanelem.
+    pub show_help: bool,
     /// Obszary kart (wypełniane przez ui::ui, czytane przez hit-testy).
     pub card_areas: Vec<(&'static str, Area)>,
     pub command_bar_area: Option<Area>,
@@ -235,6 +238,7 @@ impl App {
             dashboard_hover: None,
             should_quit: false,
             active_panel: Panel::Side,
+            show_help: false,
             card_areas: Vec::new(),
             command_bar_area: None,
             side_area: None,
@@ -281,14 +285,6 @@ impl App {
     /// Obsługa kliknięcia — rozróżnia command bar/sidebar/main po
     /// obszarach zapisanych w `on_render`.
     pub fn on_click(&mut self, col: u16, row: u16) {
-        // Exit zawsze działa (klik lub Enter na Exit).
-        if let Some(idx) = self.side_index_at(col, row) {
-            if SIDEBAR_ITEMS[idx] == "Exit" {
-                self.should_quit = true;
-                return;
-            }
-        }
-
         // Command bar.
         if let Some(rect) = self.command_bar_area {
             if rect.contains(col, row) {
@@ -310,11 +306,25 @@ impl App {
         // Sidebar.
         if let Some(_rect) = self.side_area {
             if let Some(idx) = self.side_index_at(col, row) {
-                self.side_active = idx;
-                self.side_cursor = idx;
-                self.side_hover = Some(idx);
-                self.active_panel = Panel::Side;
-                return;
+                match SIDEBAR_ITEMS[idx] {
+                    "Exit" => {
+                        self.should_quit = true;
+                        return;
+                    }
+                    "Help" => {
+                        self.show_help = true;
+                        self.active_panel = Panel::Main;
+                        return;
+                    }
+                    _ => {
+                        self.show_help = false;
+                        self.side_active = idx;
+                        self.side_cursor = idx;
+                        self.side_hover = Some(idx);
+                        self.active_panel = Panel::Side;
+                        return;
+                    }
+                }
             }
         }
         // Main (dashboard cards).
@@ -434,15 +444,25 @@ impl App {
                         let name = SIDEBAR_ITEMS[idx.min(SIDEBAR_ITEMS.len() - 1)];
                         match name {
                             "Exit" => self.should_quit = true,
+                            "Help" => {
+                                self.show_help = true;
+                                self.active_panel = Panel::Main;
+                            }
                             _ => {
+                                self.show_help = false;
                                 self.side_active = idx;
                             }
                         }
                     }
                     Panel::Main => {
-                        // Enter w Main: przejdź do następnego CorePanela
-                        // (Install → Onboarding → Main), jeśli to nie Main.
-                        self.core_panel = self.core_panel.next();
+                        if self.show_help {
+                            // Escape z Help — wróć do bieżącego panelu Core.
+                            self.show_help = false;
+                        } else {
+                            // Enter w Main: przejdź do następnego CorePanela
+                            // (Install → Onboarding → Main).
+                            self.core_panel = self.core_panel.next();
+                        }
                     }
                 }
             }

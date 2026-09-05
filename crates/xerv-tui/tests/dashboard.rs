@@ -212,6 +212,36 @@ fn nav_down_up_cycles_sidebar() {
 // ---- exit -----------------------------------------------------------------------
 
 #[test]
+fn help_screen_present_when_activated() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    app.show_help = true;
+    app.active_panel = Panel::Main;
+    let lines = render_lines(&mut app, 80, 24);
+    assert_core_card_present(&lines, "80", "help");
+    for needle in ["Navigation", "Mouse", "Panels"] {
+        let found = lines.iter().any(|l| l.contains(needle));
+        assert!(found, "help should show '{needle}'");
+    }
+}
+
+#[test]
+fn help_escapes_back_to_core_panel_via_enter() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = make_app(dir.path(), 1_700_000_000);
+    // Cursor na Help (idx 2), focus na Sidebar.
+    app.active_panel = Panel::Side;
+    app.side_cursor = 2;
+    app.handle_event(Event::NavActivate);
+    assert!(app.show_help);
+    assert_eq!(app.active_panel, Panel::Main);
+    // Enter w Main z powrotem — Help → wróć do core panel.
+    app.handle_event(Event::NavActivate);
+    assert!(!app.show_help, "Enter should close Help");
+    assert_eq!(app.core_panel, CorePanel::Install);
+}
+
+#[test]
 fn exit_quit_from_sidebar_activate() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = make_app(dir.path(), 1_700_000_000);
