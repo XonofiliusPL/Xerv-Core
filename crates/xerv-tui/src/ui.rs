@@ -24,7 +24,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
     draw_header(f, chunks[0]);
     draw_content(f, chunks[1], app);
-    draw_footer(f, chunks[2]);
+    draw_footer(f, chunks[2], app);
 }
 
 // ---- design tokens (DESIGN.md) -------------------------------------------------
@@ -76,8 +76,9 @@ fn draw_header(f: &mut Frame, area: Rect) {
 /// Footer — wyłącznie hint skrótów, nic więcej.
 /// Klawisze = accent_primary (cyan), opisy (Nav/Confirm/Return) = value
 /// (white) — zachowane odstępy i układ.
-fn draw_footer(f: &mut Frame, area: Rect) {
-    let line = Line::from(vec![
+/// `U Update` pojawia się tylko gdy update dostępny.
+fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
+    let mut spans: Vec<Span<'static>> = vec![
         Span::raw(" "),
         Span::styled("← → ↑ ↓", accent_primary()),
         Span::styled("  Nav", value_style()),
@@ -87,7 +88,13 @@ fn draw_footer(f: &mut Frame, area: Rect) {
         Span::raw("    "),
         Span::styled("BackSpace", accent_primary()),
         Span::styled("  Return", value_style()),
-    ]);
+    ];
+    if app.update_available.is_some() {
+        spans.push(Span::raw("    "));
+        spans.push(Span::styled("U", accent_primary()));
+        spans.push(Span::styled("  Update", value_style()));
+    }
+    let line = Line::from(spans);
     f.render_widget(Paragraph::new(line), area);
 }
 
@@ -99,6 +106,7 @@ fn draw_content(f: &mut Frame, area: Rect, app: &mut App) {
         crate::app::Screen::Main => draw_main(f, area, app),
         crate::app::Screen::Help => draw_help(f, area),
         crate::app::Screen::Settings => draw_settings(f, area),
+        crate::app::Screen::UpdateConfirm => draw_update_confirm(f, area, app),
     }
 }
 
@@ -199,6 +207,11 @@ fn draw_help(f: &mut Frame, area: Rect) {
             Span::styled("BackSpace", accent_primary()),
             Span::raw("  Return"),
         ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("U", accent_primary()),
+            Span::raw("   Open Update (when available)"),
+        ]),
         Line::from(Span::raw("")),
         Line::from(Span::styled(
             " About",
@@ -219,6 +232,46 @@ fn draw_help(f: &mut Frame, area: Rect) {
     while body.len() < inner_h {
         body.push(Line::from(Span::raw("")));
     }
+
+    f.render_widget(
+        Paragraph::new(body)
+            .alignment(Alignment::Center)
+            .block(block),
+        area,
+    );
+}
+
+/// Ekran potwierdzenia aktualizacji — pełny ekran.
+/// Pokazuje: aktualna wersja, dostępna wersja, przycisk Y/N.
+fn draw_update_confirm(f: &mut Frame, area: Rect, app: &mut App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" update xerv ")
+        .border_style(accent_primary_bold());
+
+    let current = xerv_core::api::api_version().to_string();
+    let latest = app
+        .update_available
+        .clone()
+        .unwrap_or_else(|| "?".to_string());
+
+    let body: Vec<Line<'static>> = vec![
+        Line::from(Span::styled(" New update available", value_style())),
+        Line::from(Span::raw("")),
+        Line::from(vec![
+            Span::raw("  Current: "),
+            Span::styled(current.clone(), accent_secondary()),
+        ]),
+        Line::from(vec![
+            Span::raw("  Latest:  "),
+            Span::styled(latest.clone(), accent_primary_bold()),
+        ]),
+        Line::from(Span::raw("")),
+        Line::from(Span::styled(
+            " Press Y to confirm, N or BackSpace to cancel.",
+            muted_style(),
+        )),
+    ];
 
     f.render_widget(
         Paragraph::new(body)

@@ -26,3 +26,6 @@ pub use crate::core::XervCore;
 pub use crate::error::{Error, Result};
 pub use crate::state::CoreState;
 pub use crate::version::{api_version, API_VERSION};
+
+// Reexport semver dla consumerów (TUI/CLI) — potrzebny do komparacji wersji.
+pub use semver::Version;

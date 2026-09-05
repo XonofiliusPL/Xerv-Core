@@ -6,28 +6,28 @@ use crate::event::Event;
 ///
 /// Jeden główny ekran jest aktywny w danej chwili; nawigacja przełącza
 /// `current_screen`. `nav_stack` zapamiętuje historię (BackSpace = pop).
-/// Brak stałego Sidebar/Main — każdy widok zajmuje cały obszar treści.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
-    /// Główny ekran — lista nawigacji: Settings, Help, Quit.
+    /// Główny ekran — lista nawigacji: Settings, Help, Update, Quit.
     Main,
     /// Ekran pomocy (pełny ekran).
     Help,
     /// Ekran ustawień (placeholder — pełny ekran, pusty).
     Settings,
+    /// Ekran potwierdzenia aktualizacji (pełny ekran).
+    UpdateConfirm,
 }
 
 /// Pozycja w głównej liście nawigacji (Screen::Main).
+/// `Update` jest dynamiczny — tylko gdy dostępna aktualizacja.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NavItem {
     Settings,
     Help,
+    /// Update Xerv — widoczny tylko gdy `App::update_available == Some`.
+    Update,
     Quit,
 }
-
-/// Lista nawigacji (kolejność = kolejność strzałek).
-pub const NAV_ITEMS: [NavItem; 3] = [NavItem::Settings, NavItem::Help, NavItem::Quit];
-pub const NAV_COUNT: usize = NAV_ITEMS.len();
 
 /// Etykieta + skrót dla pozycji nawigacji.
 #[derive(Debug, Clone, Copy)]
@@ -36,14 +36,12 @@ pub struct NavEntry {
     pub shortcut: &'static str,
 }
 
-/// Stałe etykiety (dla testów renderu).
-pub const NAV_LABELS: [&str; 3] = ["Settings", "Help", "Quit"];
-
 impl NavItem {
     pub fn label(self) -> &'static str {
         match self {
             NavItem::Settings => "Settings",
             NavItem::Help => "Help",
+            NavItem::Update => "Update Xerv",
             NavItem::Quit => "Quit",
         }
     }
@@ -51,17 +49,9 @@ impl NavItem {
         match self {
             NavItem::Settings => "s",
             NavItem::Help => "h",
+            NavItem::Update => "U",
             NavItem::Quit => "q",
         }
-    }
-}
-
-/// Oblicza indeks pozycji w NAV_ITEMS.
-pub fn nav_index(item: NavItem) -> usize {
-    match item {
-        NavItem::Settings => 0,
-        NavItem::Help => 1,
-        NavItem::Quit => 2,
     }
 }
 
@@ -100,6 +90,10 @@ pub struct App {
     pub should_quit: bool,
     /// Obszar listy nawigacji (dla hit-testów mysą).
     pub nav_area: Option<Rect>,
+    /// Najnowsza dostępna wersja jako string (Some = update dostępny).
+    pub update_available: Option<String>,
+    /// Czy aktualizacja w toku.
+    pub update_in_progress: bool,
 }
 
 impl App {
@@ -116,12 +110,20 @@ impl App {
             nav_hover: None,
             should_quit: false,
             nav_area: None,
+            update_available: None,
+            update_in_progress: false,
         })
     }
 
-    /// Pobiera listę nawigacyjnych indeksów w aktualnym widoku.
-    pub fn entries(&self) -> &[NavItem] {
-        &NAV_ITEMS
+    /// Dynamiczna lista nawigacji (Settings, Help, Update, Quit).
+    /// `Update` jest widoczny tylko gdy `update_available == Some`.
+    pub fn entries(&self) -> Vec<NavItem> {
+        let mut items = vec![NavItem::Settings, NavItem::Help];
+        if self.update_available.is_some() {
+            items.push(NavItem::Update);
+        }
+        items.push(NavItem::Quit);
+        items
     }
 
     /// Obsługa zdarzenia głównego loopu.
@@ -134,39 +136,29 @@ impl App {
                     self.current_screen = Screen::Help;
                 }
             }
-            Event::NavDown => {
-                if self.current_screen == Screen::Main {
-                    self.nav_cursor = (self.nav_cursor + 1) % NAV_COUNT;
+            Event::OpenUpdate => {
+                if self.current_screen == Screen::Main && self.update_available.is_some() {
+                    self.nav_stack.push(self.current_screen);
+                    self.current_screen = Screen::UpdateConfirm;
                 }
             }
-            Event::NavUp => {
-                if self.current_screen == Screen::Main {
-                    self.nav_cursor = if self.nav_cursor == 0 {
-                        NAV_COUNT - 1
-                    } else {
-                        self.nav_cursor - 1
-                    };
+            Event::NavDown => self.move_cursor(1),
+            Event::NavUp => self.move_cursor(-1i32),
+            Event::NavLeft => self.move_cursor(-1i32),
+            Event::NavRight => self.move_cursor(1),
+            Event::Confirm => self.activate_current(),
+            Event::Return => self.go_back(),
+            // Y — potwierdź update na UpdateConfirm screen.
+            Event::ConfirmUpdate => {
+                if self.current_screen == Screen::UpdateConfirm && self.update_available.is_some() {
+                    self.update_in_progress = true;
                 }
             }
-            Event::NavLeft => {
-                if self.current_screen == Screen::Main {
-                    self.nav_cursor = if self.nav_cursor == 0 {
-                        NAV_COUNT - 1
-                    } else {
-                        self.nav_cursor - 1
-                    };
+            // N — anuluj update na UpdateConfirm screen.
+            Event::CancelUpdate => {
+                if self.current_screen == Screen::UpdateConfirm {
+                    self.go_back();
                 }
-            }
-            Event::NavRight => {
-                if self.current_screen == Screen::Main {
-                    self.nav_cursor = (self.nav_cursor + 1) % NAV_COUNT;
-                }
-            }
-            Event::Confirm => {
-                self.activate_current();
-            }
-            Event::Return => {
-                self.go_back();
             }
             Event::Tick => {}
             Event::Hover(col, row) => self.on_hover(col, row),
@@ -174,12 +166,24 @@ impl App {
         }
     }
 
+    /// Przesunięcie kursora o `delta` (z wrap, tylko na Main).
+    fn move_cursor(&mut self, delta: i32) {
+        if self.current_screen != Screen::Main {
+            return;
+        }
+        let count = self.entries().len();
+        let signed = self.nav_cursor as i32 + delta;
+        self.nav_cursor = ((signed % count as i32).rem_euclid(count as i32)) as usize;
+    }
+
     /// Aktywacja aktualnie podświetlonej pozycji (Enter).
     fn activate_current(&mut self) {
         if self.current_screen != Screen::Main {
             return;
         }
-        match self.entries()[self.nav_cursor] {
+        let entries = self.entries();
+        let idx = self.nav_cursor % entries.len();
+        match entries[idx] {
             NavItem::Settings => {
                 self.nav_stack.push(self.current_screen);
                 self.current_screen = Screen::Settings;
@@ -187,6 +191,10 @@ impl App {
             NavItem::Help => {
                 self.nav_stack.push(self.current_screen);
                 self.current_screen = Screen::Help;
+            }
+            NavItem::Update => {
+                self.nav_stack.push(self.current_screen);
+                self.current_screen = Screen::UpdateConfirm;
             }
             NavItem::Quit => {
                 self.should_quit = true;
@@ -207,9 +215,9 @@ impl App {
             if !rect.contains(col, row) || rect.h == 0 {
                 return None;
             }
-            // Każda pozycja zajmuje jeden wiersz w obszarze listy.
+            let count = self.entries().len();
             let idx = (row - rect.y) as usize;
-            if idx < NAV_COUNT {
+            if idx < count {
                 Some(idx)
             } else {
                 None
@@ -217,20 +225,16 @@ impl App {
         });
     }
 
-    /// Mouse click — aktywuje pozycję lub zamyka aplikację.
+    /// Mouse click — aktywuje pozycję.
     pub fn on_click(&mut self, col: u16, row: u16) {
         if let Some(rect) = self.nav_area {
-            if rect.contains(col, row) {
-                if rect.h == 0 {
-                    return;
-                }
+            if rect.contains(col, row) && rect.h > 0 {
+                let count = self.entries().len();
                 let idx = (row - rect.y) as usize;
-                if idx >= NAV_COUNT {
-                    return;
+                if idx < count {
+                    self.nav_cursor = idx;
+                    self.activate_current();
                 }
-                // Klik = aktywacja tej samej pozycji co cursor.
-                self.nav_cursor = idx;
-                self.activate_current();
             }
         }
     }

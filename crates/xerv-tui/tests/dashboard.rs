@@ -13,7 +13,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 use xerv_core::api::CoreConfig;
-use xerv_tui::app::{App, Screen, NAV_COUNT};
+use xerv_tui::app::{App, Screen};
 use xerv_tui::event::Event;
 use xerv_tui::ui::ui;
 
@@ -58,7 +58,7 @@ fn main_screen_lists_exactly_required_items() {
         let found = lines.iter().any(|l| l.contains(name));
         assert!(found, "main screen should show '{name}'");
     }
-    assert_eq!(NAV_COUNT, 3);
+    assert_eq!(app.entries().len(), 3, "no update available → 3 entries");
 }
 
 #[test]
@@ -120,6 +120,10 @@ fn help_screen_shows_shortcuts_section() {
         let found = lines.iter().any(|l| l.contains(key));
         assert!(found, "help keyboard section should show '{key}'");
     }
+    assert!(
+        joined.contains('U') && joined.to_lowercase().contains("update"),
+        "help should show U shortcut for update"
+    );
 }
 
 #[test]
@@ -258,6 +262,46 @@ fn mouse_click_outside_nav_area_does_nothing() {
     assert_eq!(app.nav_cursor, 0);
     assert!(!app.should_quit);
     assert_eq!(app.current_screen, Screen::Main);
+}
+
+// ---- update visibility ----------------------------------------------------------
+#[test]
+fn update_not_visible_when_no_update_available() {
+    let mut app = make_app();
+    let lines = render(&mut app, 80, 24);
+    let joined = lines.join("\n");
+    assert!(
+        !joined.contains("Update Xerv"),
+        "Update Xerv must not be visible without update"
+    );
+}
+
+#[test]
+fn update_visible_above_quit_when_update_available() {
+    let mut app = make_app();
+    app.update_available = Some("0.2.0".to_string());
+    let lines = render(&mut app, 80, 24);
+    let joined = lines.join("\n");
+    assert!(joined.contains("Update Xerv"), "Update must be visible");
+    // Quit musi być pod Update.
+    let update_idx = joined.find("Update Xerv").unwrap();
+    let quit_idx = joined.rfind("Quit").unwrap_or(joined.len());
+    assert!(
+        update_idx < quit_idx,
+        "Update must appear before Quit in render"
+    );
+}
+
+#[test]
+fn footer_hint_shows_u_shortcut_for_update() {
+    let mut app = make_app();
+    app.update_available = Some("0.2.0".to_string());
+    let lines = render(&mut app, 100, 24);
+    let joined = lines.join("\n");
+    assert!(
+        joined.contains('U') && joined.to_lowercase().contains("update"),
+        "footer hint should mention 'U' key for update"
+    );
 }
 
 // ---- hover vs cursor separation --------------------------------------------------

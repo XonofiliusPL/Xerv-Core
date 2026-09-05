@@ -19,10 +19,16 @@ pub enum Event {
     NavRight,
     /// Enter / Space — potwierdza aktualną pozycję (OpenScreen/Activate).
     Confirm,
+    /// Y — potwierdza update na UpdateConfirm screen.
+    ConfirmUpdate,
+    /// N — anuluje update na UpdateConfirm screen.
+    CancelUpdate,
     /// Backspace — powrót do poprzedniego widoku (Return).
     Return,
     /// h — otwiera Help (z dowolnego widoku).
     OpenHelp,
+    /// u — otwiera Update screen (gdy dostępny, z Main).
+    OpenUpdate,
     /// Ruch myszy na (col, row) — czysty highlight (magenda), nie zmienia cursor.
     Hover(u16, u16),
     /// Kliknięcie myszą na (col, row) — aktywacja pozycji.
@@ -61,9 +67,14 @@ pub fn read_event() -> std::io::Result<Event> {
                     KeyCode::Char('q') | KeyCode::Esc => Event::Quit,
                     // h — Help (globalny skrót).
                     KeyCode::Char('h') => Event::OpenHelp,
+                    // U — Update Xerv (gdy dostępny, z Main).
+                    KeyCode::Char('U') => Event::OpenUpdate,
                     KeyCode::Tab => Event::NavRight,
                     KeyCode::BackTab => Event::NavLeft,
                     KeyCode::Enter | KeyCode::Char(' ') => Event::Confirm,
+                    // y/n na UpdateConfirm screen.
+                    KeyCode::Char('y') | KeyCode::Char('Y') => Event::ConfirmUpdate,
+                    KeyCode::Char('n') | KeyCode::Char('N') => Event::CancelUpdate,
                     KeyCode::Backspace => Event::Return,
                     // ↑/↓ oraz ←/→ — nawigacja w Screen::Main.
                     KeyCode::Down | KeyCode::Right => Event::NavDown,

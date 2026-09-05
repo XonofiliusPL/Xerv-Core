@@ -10,45 +10,51 @@ use std::time::Duration;
 
 use xerv_core::api::CoreConfig;
 use xerv_tui::app::App;
+use xerv_tui::cli;
 use xerv_tui::event::{read_event, Event};
 use xerv_tui::ui::ui;
-
-mod cli;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let mut iter = args.iter().skip(1);
     if let Some(first) = iter.next() {
         let first = first.as_str();
-        if first == "-h" || first == "--help" {
-            print_usage();
-            return Ok(());
-        }
-        if first == "-V" || first == "--version" || first == "version" {
-            cli::version();
-            return Ok(());
-        }
-        if first == "install" {
-            match cli::run_install() {
+        match first {
+            "-h" | "--help" => {
+                print_usage();
+                return Ok(());
+            }
+            "-V" | "--version" | "version" => {
+                cli::version();
+                return Ok(());
+            }
+            "install" => match cli::run_install() {
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     eprintln!("xerv install: {e}");
                     std::process::exit(1);
                 }
-            }
-        }
-        if first == "uninstall" {
-            match cli::run_uninstall() {
+            },
+            "uninstall" => match cli::run_uninstall() {
                 Ok(_) => return Ok(()),
                 Err(e) => {
                     eprintln!("xerv uninstall: {e}");
                     std::process::exit(1);
                 }
+            },
+            "update" => match cli::run_update() {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    eprintln!("xerv update: {e}");
+                    std::process::exit(1);
+                }
+            },
+            _ => {
+                eprintln!("xerv: unknown command '{first}'");
+                print_usage();
+                std::process::exit(1);
             }
         }
-        eprintln!("xerv: unknown command '{first}'");
-        print_usage();
-        std::process::exit(1);
     }
 
     // No args → Core TUI
@@ -63,6 +69,17 @@ fn main() -> io::Result<()> {
         }
     };
 
+    // Auto-check update w tle — nie blokuje TUI.
+    // Sprawdza GitHub Releases na starcie; wynik ustawia `app.update_available`.
+    let update_thread = std::thread::spawn(move || -> Option<String> {
+        use xerv_core::api::api_version;
+        let mut res = None;
+        if let Ok(info) = xerv_tui::update::check_for_update(&api_version()) {
+            res = info.map(|r| r.version.to_string());
+        }
+        res
+    });
+
     // Raw mode + alternate screen + mouse capture.
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -70,7 +87,7 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_app(&mut terminal, &mut app);
+    let result = run_app(&mut terminal, &mut app, Some(update_thread));
     drop(terminal);
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
@@ -84,16 +101,37 @@ fn print_usage() {
     eprintln!("  (none)     Launch Xerv Core TUI");
     eprintln!("  install    Interactively install xerv (user-space)");
     eprintln!("  uninstall  Remove xerv installation");
+    eprintln!("  update     Update xerv to latest release");
     eprintln!("  version    Print xerv version");
     eprintln!("  help, -h   Print this help");
 }
 
-fn run_app<B>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()>
+fn run_app<B>(
+    terminal: &mut Terminal<B>,
+    app: &mut App,
+    mut update_thread: Option<std::thread::JoinHandle<Option<String>>>,
+) -> io::Result<()>
 where
     B: ratatui::backend::Backend,
     std::io::Error: From<B::Error>,
 {
+    let mut update_checked = false;
     loop {
+        // Sprawdzamy raz w tle czy wątek update się skończył.
+        if !update_checked
+            && update_thread
+                .as_ref()
+                .map(|h| h.is_finished())
+                .unwrap_or(false)
+        {
+            if let Some(handle) = update_thread.take() {
+                if let Ok(Some(v)) = handle.join() {
+                    app.update_available = Some(v);
+                }
+            }
+            update_checked = true;
+        }
+
         terminal.draw(|f| ui(f, app))?;
         if ct_event::poll(Duration::from_millis(200))? {
             let ev = read_event()?;

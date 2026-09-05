@@ -113,6 +113,43 @@ fn footer_keys_are_cyan_accents() {
 }
 
 #[test]
+fn footer_update_shortcut_only_when_update_available() {
+    let mut app = make_app();
+    let s = render(&mut app, 120, 24);
+    assert!(
+        !s.contains("U  Update"),
+        "no U Update in footer without update"
+    );
+    app.update_available = Some("0.2.0".to_string());
+    let s2 = render(&mut app, 120, 24);
+    assert!(
+        s2.contains("U  Update"),
+        "footer shows U Update when available"
+    );
+}
+
+#[test]
+fn footer_update_key_is_cyan_when_available() {
+    let mut app = make_app();
+    app.update_available = Some("0.2.0".to_string());
+    let backend = TestBackend::new(120, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
+    let s = terminal.backend().to_string();
+    let lines: Vec<String> = s.lines().map(|l| l.trim_matches('"').to_string()).collect();
+    if let Some((y, x)) = find_cell(&lines, "U  Update") {
+        let styles = cell_styles(&mut app, 120, 24);
+        let st = styles[y][x];
+        assert_eq!(
+            st.fg,
+            Some(ratatui::style::Color::Cyan),
+            "footer Update key must be Cyan, got {:?}",
+            st.fg
+        );
+    }
+}
+
+#[test]
 fn footer_descriptions_are_white() {
     let mut app = make_app();
     let backend = TestBackend::new(120, 24);
