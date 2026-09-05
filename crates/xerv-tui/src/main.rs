@@ -28,20 +28,6 @@ fn main() -> io::Result<()> {
                 cli::version();
                 return Ok(());
             }
-            "install" => match cli::run_install() {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    eprintln!("xerv install: {e}");
-                    std::process::exit(1);
-                }
-            },
-            "uninstall" => match cli::run_uninstall() {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    eprintln!("xerv uninstall: {e}");
-                    std::process::exit(1);
-                }
-            },
             "update" => match cli::run_update() {
                 Ok(_) => return Ok(()),
                 Err(e) => {
@@ -99,8 +85,6 @@ fn print_usage() {
     eprintln!();
     eprintln!("Commands:");
     eprintln!("  (none)     Launch Xerv Core TUI");
-    eprintln!("  install    Interactively install xerv (user-space)");
-    eprintln!("  uninstall  Remove xerv installation");
     eprintln!("  update     Update xerv to latest release");
     eprintln!("  version    Print xerv version");
     eprintln!("  help, -h   Print this help");

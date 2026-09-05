@@ -1,271 +1,201 @@
 # Xerv
 
-[![Xerv Core](https://img.shields.io/badge/Xerv_Core-0.1.0-blue)]()
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)]()
-[![GitHub](https://img.shields.io/badge/GitHub-XonofiliusPL%2FXerv--Core-blue)]()
+[![npm](https://img.shields.io/npm/v/xerv.svg)](https://www.npmjs.com/package/xerv)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
+[![GitHub](https://img.shields.io/badge/GitHub-XonofiliusPL%2FXerv--Core-blue)](https://github.com/XonofiliusPL/Xerv-Core)
 
-**Xerv** is a modular infrastructure for systems, agents, and automation.
-
-**Xerv Core** is the foundational Rust library providing the runtime,
-configuration, state management, logging, versioning, and lifecycle
-primitives upon which the wider Xerv ecosystem is built.
+**Modular terminal infrastructure for systems, agents, and automation.**
 
 ---
 
-## Overview
+## What is Xerv?
 
-Xerv Core is the foundational runtime and API layer of the Xerv ecosystem,
-providing lifecycle management, configuration, persistent state, logging,
-versioning, and a stable interface for higher-level components.
+Xerv is a modern TUI-based platform designed to bring together system monitoring,
+agent orchestration, and automation workflows into a single, keyboard-driven
+terminal interface. Built in Rust for performance and reliability, Xerv provides
+a foundation for building composable, interactive terminal tools.
 
-The Core is intentionally kept independent from higher-level modules and
-plugins. Components built around Xerv should communicate through defined
-APIs, events, and integration points rather than depending directly on
-internal implementation details.
+## Why Xerv?
 
-## Xerv Core
+- **Terminal-native** — works in any terminal, no GUI required
+- **Keyboard-driven navigation** — designed for power users who live in the terminal
+- **Live system insights** — monitor processes, resources, and services in real-time
+- **Agent workflow** — integrate AI agents and automation directly into your terminal session
+- **Extensible architecture** — future plugin/addons system for custom functionality
+- **Cross-platform** — built for Linux and macOS (Windows coming later)
 
-The Rust foundation of Xerv. Provides:
+## What Can Xerv Do Right Now?
 
-- **Core lifecycle management** — initialization and graceful shutdown
-- **Persistent application state** — JSON-backed, atomic writes
-- **TOML-based configuration** — extensible configuration loader
-- **JSON state persistence** — structured state with schema versioning
-- **Atomic state writes** — safe concurrent state access via `Mutex`
-- **Structured logging** via `tracing` / `tracing-subscriber`
-- **API versioning** — stable `API_VERSION` contract
-- **Public API module** and re-exports
-- **Error handling** through a dedicated Core error type
-- **Rust-native library architecture**
+**Xerv Core** is currently in **pre-alpha** development. Here is what the
+current build provides:
 
-## Xerv TUI
+- **Interactive TUI** — a screen-based terminal interface with smooth keyboard
+  and mouse navigation
+- **Core runtime** — lifecycle management, configuration, and persistent state
+- **Built-in commands** — version info, help, and automatic update checking
+- **Update system** — checks GitHub releases, verifies SHA256 checksums, and
+  performs safe atomic binary replacement with rollback on failure
 
-A terminal user interface built with `ratatui` + `crossterm`. Features a
-screen-based navigation model with keyboard and mouse interaction support.
+### Keyboard Shortcuts
 
-## CLI Mode
+| Key         | Action                            |
+|-------------|-----------------------------------|
+| `q` / `Esc` | Quit                              |
+| `h`         | Open Help                         |
+| `← ↑ → ↓`   | Navigate the menu                 |
+| `Enter`     | Confirm / activate selection      |
+| `Backspace` | Return to previous screen         |
+| `U`         | Open Update screen (when available) |
+| `y`         | Confirm update                    |
+| `n`         | Cancel update                     |
 
-The `xerv` binary also supports CLI commands for installation,
-uninstallation, updating, and version printing — all operating in
-user-space without requiring `sudo`.
+---
 
-## Current Status
+## Installation
 
-**● Pre-alpha — active development**
-
-Xerv Core is under active development. APIs, architecture, and
-implementation details may change as the project evolves.
-
-## Architecture
-
-Xerv Core is designed as a small foundational library rather than a
-monolithic application.
-
-```text
-Higher-level components
-        │
-        ▼
-   Xerv API layer
-        │
-        ▼
-    Xerv Core
-    ├── Lifecycle
-    ├── Configuration
-    ├── State
-    ├── Logging
-    └── Versioning
-```
-
-The Core does not depend on modules or plugins. Higher-level functionality
-is expected to build on top of the Core through its public interfaces.
-
-## Current Capabilities
-
-### Rust Core (`xerv-core`)
-
-- `XervCore` — main runtime instance with lifecycle management
-- `CoreConfig` — TOML-based configuration with sensible defaults
-- `CoreState` — persistent state with schema versioning and atomic writes
-- `Error` enum — structured error handling with `thiserror`
-- `API_VERSION` — stable semantic versioning contract (`0.1.0`)
-- `tracing` subscriber initialization with `RUST_LOG` support
-
-### TUI (`xerv-tui`)
-
-- Screen-based navigation model (Main, Help, Settings, UpdateConfirm)
-- Keyboard navigation: arrow keys, Enter, Backspace, `h`, `q`, `U`
-- Mouse interaction: hover highlighting and click-to-activate
-- Help screen with keyboard shortcuts and source link
-- Update confirmation screen with version comparison
-
-### CLI (`xerv` binary)
-
-- `xerv` — launch Core TUI
-- `xerv install` — interactive user-space installer
-- `xerv uninstall` — remove installation (binary, symlink, data, config)
-- `xerv update` — update to latest GitHub release (with SHA256 verification)
-- `xerv version` / `xerv --version` — print current version
-- `xerv help` / `xerv -h` / `xerv --help` — print usage information
-
-### Update System
-
-- GitHub Releases API integration for version detection
-- SHA256 checksum verification for safe downloads
-- Atomic installation with backup and rollback on failure
-- Supports `.tar.gz` and `.tar.zst` artifacts
-
-## Supported Environment
-
-The project currently targets **Linux** (`x86_64-unknown-linux-gnu`,
-`aarch64-unknown-linux-gnu`) and **macOS** (`x86_64-apple-darwin`,
-`aarch64-apple-darwin`). Other targets may work but are not actively
-tested.
-
-## Getting Started
-
-### Prerequisites
-
-- **Rust** 1.74 or later
-- A Unix-like environment (Linux or macOS)
-
-### Installation
+Xerv is distributed as an npm package, which provides the native Rust binary.
 
 ```bash
 npm install -g xerv
 ```
 
-This installs the `xerv` binary globally via npm, which downloads and
-sets up the native Rust binary in user-space (no `sudo` required).
+This installs the `xerv` binary globally in user-space — **no `sudo` required**.
 
-Alternatively, you can build from source:
+### System Requirements
 
-```bash
-cargo build --release
-cp target/release/xerv ~/.local/bin/
-```
+- **Node.js** 18+ (for the npm wrapper)
+- **Linux** (x86_64) — current supported platform
+- macOS — supported (Apple Silicon and Intel)
 
-### Running Xerv
+---
 
-```bash
-xerv          # Launch Xerv Core TUI
-xerv version  # Print version information
-xerv help     # Show command help
-```
+## Getting Started
 
-### Updating Xerv
+Launch Xerv:
 
 ```bash
-xerv update   # Fetch and install the latest release
+xerv
 ```
 
-## Repository Structure
+This starts the interactive TUI. Use the arrow keys to navigate, `Enter` to
+select, and `q` to quit.
 
-```
-Xerv-Core/
-├── Cargo.toml              # Workspace manifest
-├── Cargo.lock              # Locked dependency versions
-├── README.md               # This file
-├── DESIGN.md               # Visual design specification
-├── crates/
-│   ├── xerv-core/          # Core library (errors, config, state, logging, lifecycle)
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── lib.rs      # Public API, module declarations
-│   │       ├── api.rs      # Stable public API re-exports and aliases
-│   │       ├── error.rs    # Error type definitions
-│   │       ├── config.rs   # Core configuration
-│   │       ├── state.rs    # Persistent state management
-│   │       ├── logging.rs  # Tracing subscriber initialization
-│   │       ├── core.rs     # XervCore runtime instance
-│   │       ├── version.rs  # API version constants
-│   │       └── tests/      # Core tests (error, config, state, lifecycle, ...)
-│   └── xerv-tui/           # Terminal UI and CLI
-│       ├── Cargo.toml
-│       └── src/
-│           ├── main.rs     # Entry point, CLI dispatch, TUI loop
-│           ├── app.rs      # Application state model (screens, navigation)
-│           ├── cli.rs      # CLI commands (install, uninstall, update, version)
-│           ├── event.rs    # Input event handling (keyboard, mouse)
-│           ├── ui.rs       # ratatui rendering (header, footer, screens)
-│           ├── update.rs   # Update system (GitHub API, download, install)
-│           ├── lib.rs      # Module declarations
-│           └── tests/      # TUI tests (app, dashboard, header, CLI dispatch)
-├── .gitignore
-├── .claude/                # Claude Code settings (local, not committed)
-└── npm-package/            # npm distribution wrapper (native binary)
-    ├── package.json        # npm package manifest
-    ├── cli.js              # Node.js wrapper — spawns native binary
-    ├── README.npm.md       # npm-specific documentation
-    └── bin/                # Native Rust binary
-        └── xerv            # Pre-built for Linux x86_64
-```
-
-## Development
-
-Xerv Core is written in Rust.
-
-Basic validation currently includes:
+### Commands
 
 ```bash
-cargo fmt --check
-cargo test --workspace
-cargo clippy --all-targets --all-features -- -D warnings
-cargo doc --no-deps --workspace
+xerv              # Launch the TUI
+xerv help         # Show available commands
+xerv version      # Print the installed version
 ```
 
-## Build & Test
+---
 
-All workspace components build and test together:
+## Updating
+
+Xerv checks for new releases automatically on startup. When an update is
+available, an **Update** option appears in the main menu. You can also update
+manually from the command line:
 
 ```bash
-cargo build               # Build the workspace
-cargo test --workspace    # Run all tests
-cargo clippy --all-targets --all-features -- -D warnings
-cargo fmt --check
-cargo doc --no-deps --workspace
+xerv update
 ```
 
-Current validation results: build ✓, tests ✓, clippy ✓, fmt ✓, doc ✓
+Each update is verified with a SHA256 checksum and installed atomically, with
+automatic rollback on failure.
 
-## For Developers
+After updating, restart Xerv to apply changes.
 
-### Contributing
+---
 
-Contributions, feedback, and technical discussion are welcome as the
-project evolves.
+## Uninstall
 
-Please use GitHub Issues for bugs, proposals, and technical discussion
-related to Xerv Core.
+Remove Xerv completely:
 
-### License
+```bash
+npm uninstall -g xerv
+```
 
-Xerv Core is intended to be released under the **MIT OR Apache-2.0**
-dual license.
+This removes the binary and all associated files.
 
-### Source Code
+---
 
-The source code is available at:
-https://github.com/XonofiliusPL/Xerv-Core
+## Screenshots
+
+> Screenshots and animated GIFs will be added here as the TUI is finalized.
+
+---
+
+## Addons, Plugins, and Modules
+
+Xerv is designed with a future **addons ecosystem** that will allow the
+community to extend functionality with custom views, data sources, and
+automation modules.
+
+> **[Planned]** The addons/plugins/modules system does not yet exist.
+> This section is reserved for future functionality and will be populated
+> once the architecture is finalized.
+
+If you are interested in contributing to or designing the addons API, please
+[open an issue](https://github.com/XonofiliusPL/Xerv-Core/issues).
+
+---
+
+## Themes
+
+Xerv follows a **dark terminal aesthetic** with a carefully designed color
+palette:
+
+| Role            | Color      | Purpose                          |
+|-----------------|------------|----------------------------------|
+| Primary         | Cyan       | Interactive elements, brand      |
+| Secondary       | Magenta    | Selected info, accents           |
+| Neutral         | White      | Data values                      |
+| Muted           | Dark Gray  | Labels, separators, idle state   |
+| Success         | Green      | Ready status                     |
+| Danger          | Red        | Shutdown status                  |
+
+> **[Planned]** Theme configuration and user-customizable color schemes.
+
+---
 
 ## Roadmap
 
-Xerv Core will evolve incrementally as the wider Xerv architecture develops.
+Xerv is in active pre-alpha development. Here is the short-term focus:
 
-**Current (Points 1–5):**
-- Point 1: Rust Core — errors, configuration, state, logging, lifecycle
-- Point 2: Stable API module and contract
-- Point 3: Agent Workspace in dashboard
-- Point 4: TUI navigation and visual identity
-- Point 5: GitHub release detection and safe update mechanism
+| Milestone | Status      | Description |
+|-----------|-------------|-------------|
+| Point 1   | ✅ Done     | Rust Core — errors, config, state, logging, lifecycle |
+| Point 2   | ✅ Done     | Stable API module and contract |
+| Point 3   | ✅ Done     | Agent Workspace in dashboard |
+| Point 4   | ✅ Done     | TUI navigation and visual identity |
+| Point 5   | ✅ Done     | GitHub release detection and safe update mechanism |
+| npm distribution | ✅ Done | Official installation via `npm install -g xerv` |
 
-**Planned areas:**
-- Expanding the Core API surface
+**Future areas:**
+- Addons/plugins/modules ecosystem
 - Additional lifecycle and runtime capabilities
-- Stronger compatibility guarantees as the API matures
-- Foundations for higher-level Xerv components
+- Cross-platform binary packages
+- Stronger API compatibility guarantees
+- Themes and configuration customization
 
-The roadmap will be updated as features become formally planned and
-implemented.
+---
+
+## Project Status
+
+**● Pre-alpha — active development**
+
+Xerv Core is under active development. APIs, architecture, and implementation
+details may change as the project evolves.
+
+---
+
+## Links
+
+- **GitHub**: [XonofiliusPL/Xerv-Core](https://github.com/XonofiliusPL/Xerv-Core)
+- **npm**: [xerv](https://www.npmjs.com/package/xerv) — (not yet published)
+- **Issues**: [GitHub Issues](https://github.com/XonofiliusPL/Xerv-Core/issues)
+
+---
 
 ## License
 
@@ -274,4 +204,4 @@ dual license.
 
 ---
 
-**Xerv** — Modular infrastructure for systems, agents and automation.
+*Made with ❤️ in Rust.*
